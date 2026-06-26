@@ -1454,6 +1454,7 @@ function toggleGpsMode() {
 
 const stopAdd = () => { isAdd = false; tempNewPointData = null; $('addText').textContent = "Добавить новую точку"; $('addMarkerBtn').classList.remove('active'); document.getElementById('map').style.cursor = ''; updateGpsBtnVisibility(); };
 const updI = p => { 
+    if (!p || !p.pm) return;
     const isCurrent = p === activePoint;
     const hasComm = !!p.comm;
     const az = p.pts?.length >= 2 ? calcAzimuth(p.pts[0], p.pts[1]) : 0;
