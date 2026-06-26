@@ -56,6 +56,15 @@ html, body {
 }
 
 /* ============================================
+   Утилиты
+   ============================================ */
+.hidden-vis { visibility: hidden; }
+.marker-img { display: block; }
+.trigger-input { width:100%;padding:10px 14px;border-radius:10px;background:rgba(255,255,255,0.06);color:#fff;font-size:14px;outline:none;box-sizing:border-box;border:none; }
+.trigger-pad { padding:4px 16px 6px; }
+.trigger-input-num { width:100%;padding:10px 14px;border-radius:10px;background:rgba(255,255,255,0.06);color:#fff;font-size:16px;font-weight:600;outline:none;box-sizing:border-box; }
+
+/* ============================================
    Стили карты (общие)
    ============================================ */
 #map {
@@ -298,6 +307,7 @@ html, body {
 }
 
 #playBtn {
+    display: none;
     top: calc(204px + env(safe-area-inset-top));
     left: 12px;
 }
@@ -313,6 +323,7 @@ html, body {
 }
 
 #commentToggleBtn {
+    display: none;
     top: calc(204px + env(safe-area-inset-top));
     right: 12px;
 }
@@ -602,6 +613,7 @@ html, body {
    Индикатор датчика удара (шок-бар)
    ============================================ */
 #shockBar {
+    display: none;
     position: fixed;
     top: calc(4px + env(safe-area-inset-top));
     left: 0;

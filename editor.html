@@ -16,18 +16,18 @@
         Маршруты
     </button>
 </div>
-<button id="layerSwitchBtn" class="circle-btn" onclick="toggleLayer()" style="visibility:hidden">
+<button id="layerSwitchBtn" class="circle-btn hidden-vis" onclick="toggleLayer()">
     <svg viewBox="0 0 24 24"><path d="M11.99 18.54l-7.37-5.73L3 14.07l9 7 9-7-1.63-1.27-7.38 5.74zM12 16l7.36-5.73L21 9l-9-7-9 7 1.63 1.27L12 16z"/></svg>
 </button>
-<button id="listPointsBtn" class="circle-btn" onclick="openPointsOrderModal()" style="visibility:hidden">
+<button id="listPointsBtn" class="circle-btn hidden-vis" onclick="openPointsOrderModal()">
     <svg viewBox="0 0 24 24"><path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"/></svg>
 </button>
-<button id="routeSettingsBtn" class="circle-btn" onclick="openRouteSettings(curRoute)" style="visibility:hidden">
+<button id="routeSettingsBtn" class="circle-btn hidden-vis" onclick="openRouteSettings(curRoute)">
     <svg viewBox="0 0 24 24"><path d="M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.07-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61 l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41 h-3.84c-0.24,0-0.43,0.17-0.47,0.41L9.25,5.35C8.66,5.59,8.12,5.92,7.63,6.29L5.24,5.33c-0.22-0.08-0.47,0-0.59,0.22L2.74,8.87 C2.62,9.08,2.66,9.34,2.86,9.48l2.03,1.58C4.84,11.36,4.8,11.69,4.8,12s0.02,0.64,0.07,0.94l-2.03,1.58 c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5-0.38,1.03-0.7,1.62-0.94l0.36,2.54 c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.44-0.17,0.47-0.41l0.36-2.54c0.59-0.24,1.13-0.56,1.62-0.94l2.39,0.96 c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.47-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6 s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z"/></svg>
 </button>
 <div id="routeNameDisplay"></div>
 <div class="bottom-center-controls" id="bottomControls">
-    <button id="addMarkerBtn" class="btn-add-main" onclick="handleAddBtnClick()" style="visibility:hidden">
+    <button id="addMarkerBtn" class="btn-add-main hidden-vis" onclick="handleAddBtnClick()">
         <span id="addText">Добавить новую точку</span>
     </button>
     <button id="gpsModeBtn" onclick="toggleGpsMode()" style="display:none;">🌍</button>
@@ -90,7 +90,7 @@
 <script src="https://unpkg.com/@vkontakte/vk-bridge/dist/browser.min.js"></script>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://api-maps.yandex.ru/v3/?apikey=c0e28937-4e16-4d15-9b99-09a30cb8fc13&lang=ru_RU"></script>
-<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js" defer></script>
 <script src="assets/js/config.js"></script>
 <script>
 (function (global) {
@@ -510,7 +510,7 @@ ymaps3.ready.then(async () => {
 
     const userEl = document.createElement('div');
     userEl.style.cssText = 'width:16px;height:16px;transform:translate(-50%,-50%);';
-    userEl.innerHTML = '<img src="' + getUserLocSvg() + '" width="16" height="16" style="display:block" />';
+    userEl.innerHTML = '<img src="' + getUserLocSvg() + '" width="16" height="16" class="marker-img" />';
     userLocPlacemark = new YMapMarker({ coordinates: [0, 0] }, userEl);
     map.addChild(userLocPlacemark);
     initGeolocation();
@@ -549,6 +549,7 @@ ymaps3.ready.then(async () => {
             }
             if(isAdd && tempNewPointData) {
                 const newPoint = addP(latLon, { ...tempNewPointData });
+                if (!newPoint) return;
                 pushHistorySnapshot();
                 updateSaveState();
                 setActivePoint(newPoint, false);
@@ -746,7 +747,7 @@ async function moveRouteToFolder(routeKey, folderPath) {
         if (curRoute === routeKey) {
             currentRouteMeta.name = newName;
         }
-        refreshFileList();
+        await refreshFileList();
         showToast('Маршрут перемещён', 'success');
     } catch (e) {
         showToast('Ошибка перемещения', 'error');
@@ -949,8 +950,8 @@ const handleCreateNew = async () => {
     try {
         await callYcFunction('save', { m: id }, { data: [] });
         await callYcFunction('save_meta', { m: id }, { name, description: '', visible: false, creator_name: getFormattedCreatorName() });
-        refreshFileList(); 
-        loadRoute(id); 
+        await refreshFileList(); 
+        await loadRoute(id); 
         showToast("Маршрут создан", 'success'); 
     } catch (e) {
         
@@ -1198,46 +1199,51 @@ function updatePointLine(p) {
 }
 
 function addP(coords, data = null, silent = false) {
-    const { YMapMarker, YMapFeature } = ymaps3;
-    const ptsData = data?.pts || [coords];
-    const hex = COLORS[data?.color || 'Gold']?.hex || '#FFD700';
-    
-    const el = document.createElement('div');
-    el.style.cssText = 'width:40px;height:40px;transform:translate(-50%,-50%);cursor:pointer;';
-    el.dataset.pointId = data?.id || (points.length + 1);
-    
-    const p = { 
-        id: data?.id || (points.length + 1), 
-        color: data?.color || 'Gold', 
-        cmd: data?.cmd || '', 
-        comm: data?.comm || '', 
-        pts: ptsData,
-        info: data?.info || [],
-        infoPlacemarks: [],
-        pm: new YMapMarker({ coordinates: [coords[1], coords[0]] }, el),
-        line: null
-    };
-    
-    el.addEventListener('click', () => { setActivePoint(p, true); if(!isAdd && !isDrawing) openEditPointModal(p); });
-    
-    if (ptsData.length >= 2) {
-        const lineCoords = swapCoords(ptsData);
-        const strokes = [];
-        strokes.push({ width: 4, color: hex });
-        strokes.push({ width: 6, color: '#000000' });
-        p.line = new YMapFeature({
-            geometry: { type: 'LineString', coordinates: lineCoords },
-            style: { stroke: strokes }
-        });
+    try {
+        const { YMapMarker, YMapFeature } = ymaps3;
+        const ptsData = data?.pts || [coords];
+        const hex = COLORS[data?.color || 'Gold']?.hex || '#FFD700';
+        
+        const el = document.createElement('div');
+        el.style.cssText = 'width:40px;height:40px;transform:translate(-50%,-50%);cursor:pointer;';
+        el.dataset.pointId = data?.id || (points.length + 1);
+        
+        const p = { 
+            id: data?.id || (points.length + 1), 
+            color: data?.color || 'Gold', 
+            cmd: data?.cmd || '', 
+            comm: data?.comm || '', 
+            pts: ptsData,
+            info: data?.info || [],
+            infoPlacemarks: [],
+            pm: new YMapMarker({ coordinates: [coords[1], coords[0]] }, el),
+            line: null
+        };
+        
+        el.addEventListener('click', () => { setActivePoint(p, true); if(!isAdd && !isDrawing) openEditPointModal(p); });
+        
+        if (ptsData.length >= 2) {
+            const lineCoords = swapCoords(ptsData);
+            const strokes = [];
+            strokes.push({ width: 4, color: hex });
+            strokes.push({ width: 6, color: '#000000' });
+            p.line = new YMapFeature({
+                geometry: { type: 'LineString', coordinates: lineCoords },
+                style: { stroke: strokes }
+            });
+        }
+        
+        map.addChild(p.pm);
+        if (p.line) map.addChild(p.line);
+        
+        points.push(p);
+        updI(p);
+        if (!silent) updateSaveState();
+        return p;
+    } catch (e) {
+        showToast('Ошибка создания точки: ' + e.message, 'error');
+        return null;
     }
-    
-    map.addChild(p.pm);
-    if (p.line) map.addChild(p.line);
-    
-    points.push(p);
-    updI(p);
-    if (!silent) updateSaveState();
-    return p;
 }
 
 function renderInfoPlacemarks(p) {
@@ -1247,7 +1253,7 @@ function renderInfoPlacemarks(p) {
     p.info.forEach((inf, idx) => {
         const el = document.createElement('div');
         el.style.cssText = 'width:32px;height:32px;transform:translate(-50%,-50%);cursor:pointer;';
-        el.innerHTML = `<img src="znaki/${inf.image || ''}" width="32" height="32" style="display:block" />`;
+        el.innerHTML = `<img src="znaki/${inf.image || ''}" width="32" height="32" class="marker-img" />`;
         const pm = new YMapMarker({ coordinates: [inf.lon, inf.lat] }, el);
         el.addEventListener('click', () => editInfoPoint(p, idx));
         map.addChild(pm);
@@ -1304,7 +1310,7 @@ function placeInfoPoint(coords, p) {
     const { YMapMarker } = ymaps3;
     const el = document.createElement('div');
     el.style.cssText = 'width:32px;height:32px;transform:translate(-50%,-50%);';
-    el.innerHTML = `<img src="znaki/${image}" width="32" height="32" style="display:block" />`;
+    el.innerHTML = `<img src="znaki/${image}" width="32" height="32" class="marker-img" />`;
     pendingInfoPlacemark = new YMapMarker({
         coordinates: [coords[1], coords[0]],
         draggable: true,
@@ -1436,6 +1442,7 @@ function toggleGpsMode() {
             const coords = [position.coords.latitude, position.coords.longitude];
             if (isAdd && tempNewPointData) {
                 const newPoint = addP(coords, { ...tempNewPointData });
+                if (!newPoint) return;
                 map.update({ location: { center: [coords[1], coords[0]], duration: 0 } });
                 pushHistorySnapshot();
                 updateSaveState();
@@ -1464,7 +1471,7 @@ const updI = p => {
     const az = p.pts?.length >= 2 ? calcAzimuth(p.pts[0], p.pts[1]) : 0;
     const svgUrl = getNavIconSvg(COLORS[p.color].hex, p.id, az, false, isCurrent, hasComm);
     const el = p.pm.element;
-    if (el) el.innerHTML = `<img src="${svgUrl}" width="40" height="40" style="display:block" />`;
+    if (el) el.innerHTML = `<img src="${svgUrl}" width="40" height="40" class="marker-img" />`;
     if (p.pts?.length && p.pm.update) p.pm.update({ coordinates: [p.pts[0][1], p.pts[0][0]] });
 };
 function recalculateIds() {
@@ -1539,7 +1546,7 @@ function createPointCard(p, single = false) {
     };
     return item;
 }
-async function delPoint(p) {
+function delPoint(p) {
     points = points.filter(x => x !== p);
     if (p.pm) map.removeChild(p.pm);
     if (p.line) map.removeChild(p.line);
@@ -1547,8 +1554,6 @@ async function delPoint(p) {
     if (activePoint === p) activePoint = null;
     recalculateIds();
     setActivePoint(points[0] || null);
-    await saveGist();
-    showToast("Изменения сохранены", "success");
 }
 function startEditPath(p) {
     cur = p;

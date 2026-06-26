@@ -108,7 +108,7 @@
     <svg viewBox="0 0 24 24"><path d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3c-.46-4.17-3.77-7.48-7.94-7.94V1h-2v2.06C6.83 3.52 3.52 6.83 3.06 11H1v2h2.06c.46 4.17 3.77 7.48 7.94 7.94V23h2v-2.06c4.17-.46 7.48-3.77 7.94-7.94H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/></svg>
 </button>
 <button id="tiltBtn" class="circle-btn" title="2D / 3D">2D</button>
-<button id="playBtn" class="circle-btn" title="Симуляция проезда" style="display:none">
+<button id="playBtn" class="circle-btn" title="Симуляция проезда">
     <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
 </button>
 
@@ -117,7 +117,7 @@
 <div id="telemetryPanel">
     <div class="tel-item"><span class="tel-label">КМ/Ч</span><span class="tel-value" id="telSpeed">0</span></div>
 </div>
-<button id="commentToggleBtn" class="circle-btn" title="Озвучивание комментария" style="display:none">
+<button id="commentToggleBtn" class="circle-btn" title="Озвучивание комментария">
     <svg viewBox="0 0 24 24" class="speaker-on"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/></svg>
     <svg viewBox="0 0 24 24" class="speaker-off"><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/></svg>
 </button>
@@ -144,7 +144,7 @@
     </div>
 </div>
 
-<div id="shockBar" style="display:none">
+<div id="shockBar">
     <div id="shockBarFill"></div>
     <span id="shockBarValue">0.0</span>
 </div>
@@ -172,8 +172,8 @@
                 </div>
                 <div id="triggerShockControls">
                     <input type="range" id="triggerShock" min="0.5" max="3" value="1" step="0.25" oninput="updateShockDisplay()">
-                    <div style="padding:4px 16px 6px;">
-                        <input type="text" id="triggerShockPhrase" value="Сильный удар!" style="width:100%;padding:10px 14px;border-radius:10px;background:rgba(255,255,255,0.06);color:#fff;font-size:14px;outline:none;box-sizing:border-box;border:none;">
+                    <div class="trigger-pad">
+                        <input type="text" id="triggerShockPhrase" value="Сильный удар!" class="trigger-input">
                     </div>
                 </div>
             </div>
@@ -187,11 +187,11 @@
                     <span class="label">Максимальная скорость</span>
                 </div>
                 <div id="triggerSpeedAlertControls">
-                    <div style="padding:4px 16px 6px;">
-                        <input type="text" inputmode="numeric" pattern="[0-9]*" id="triggerSpeedAlert" value="58" style="width:100%;padding:10px 14px;border-radius:10px;background:rgba(255,255,255,0.06);color:#fff;font-size:16px;font-weight:600;outline:none;box-sizing:border-box;" oninput="this.value=this.value.replace(/[^0-9]/g,'')">
+                    <div class="trigger-pad">
+                        <input type="text" inputmode="numeric" pattern="[0-9]*" id="triggerSpeedAlert" value="58" class="trigger-input-num" oninput="this.value=this.value.replace(/[^0-9]/g,'')">
                     </div>
-                    <div style="padding:4px 16px 6px;">
-                        <input type="text" id="triggerSpeedAlertPhrase" value="Превышена максимальная скорость!" style="width:100%;padding:10px 14px;border-radius:10px;background:rgba(255,255,255,0.06);color:#fff;font-size:14px;outline:none;box-sizing:border-box;border:none;">
+                    <div class="trigger-pad">
+                        <input type="text" id="triggerSpeedAlertPhrase" value="Превышена максимальная скорость!" class="trigger-input">
                     </div>
                 </div>
             </div>
@@ -206,9 +206,9 @@
 
 <script src="assets/js/config.js"></script>
 <script src="https://api-maps.yandex.ru/v3/?apikey=c0e28937-4e16-4d15-9b99-09a30cb8fc13&lang=ru_RU"></script>
-<script src="https://unpkg.com/@vkontakte/vk-bridge@latest/dist/browser.min.js"></script>
+<script src="https://unpkg.com/@vkontakte/vk-bridge/dist/browser.min.js"></script>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
-<script src="assets/js/menu-module.js"></script>
+<script src="assets/js/menu-module.js" defer></script>
 <script>
 const TTS_API_URL = 'https://functions.yandexcloud.net/d4erngid6s4rf5oinnp1';
 
@@ -812,7 +812,7 @@ function renderRoutePoints() {
         const el = document.createElement('div');
         el.style.cssText = `width:40px;height:40px;cursor:pointer;transform:translate(-50%,-50%);`;
         if (isPrevious) el.style.opacity = '0.5';
-        el.innerHTML = `<img src="${getNavIconSvg(p.hex, p.id, p.az, false, isCurrent, hasComm)}" width="40" height="40" style="display:block" />`;
+        el.innerHTML = `<img src="${getNavIconSvg(p.hex, p.id, p.az, false, isCurrent, hasComm)}" width="40" height="40" class="marker-img" />`;
         el.dataset.idx = i;
         const placemark = new ymaps3.YMapMarker({ coordinates: [p.lon, p.lat] }, el);
         el.addEventListener('click', e => {
