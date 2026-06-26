@@ -1127,7 +1127,7 @@ const openInNavigator = () => {
     const routeKey = settingsRouteName || curRoute;
     if (!routeKey) return;
     const userId = window.authLogin;
-    window.location.href = `/#m=${userId}-${routeKey}`;
+    window.location.href = `navigator.html#m=${userId}-${routeKey}`;
 };
 const openSettingsModal = () => { refreshFileList(); toggleM('settingsModal'); };
 const toggleM = id => { const m = $(id); m.style.display = (m.style.display === 'none' || !m.style.display) ? 'flex' : 'none'; };
