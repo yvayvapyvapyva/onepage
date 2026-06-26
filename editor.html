@@ -1305,7 +1305,11 @@ function placeInfoPoint(coords, p) {
     const el = document.createElement('div');
     el.style.cssText = 'width:32px;height:32px;transform:translate(-50%,-50%);';
     el.innerHTML = `<img src="znaki/${image}" width="32" height="32" style="display:block" />`;
-    pendingInfoPlacemark = new YMapMarker({ coordinates: [coords[1], coords[0]] }, el);
+    pendingInfoPlacemark = new YMapMarker({
+        coordinates: [coords[1], coords[0]],
+        draggable: true,
+        onDragMove: (c) => { pendingInfoPlacemark._coords = [f6(c[1]), f6(c[0])]; }
+    }, el);
     map.addChild(pendingInfoPlacemark);
     pendingInfoPlacemark._coords = coords;
     $('addText').textContent = "Завершить установку знака";
