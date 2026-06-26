@@ -89,7 +89,7 @@
 
 <script src="https://unpkg.com/@vkontakte/vk-bridge/dist/browser.min.js"></script>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
-<script src="https://api-maps.yandex.ru/2.1/?apikey=YANDEX_API_KEY&lang=ru_RU&suppressMapOpenBlock=true"></script>
+    <script src="https://api-maps.yandex.ru/v3/?apikey=c0e28937-4e16-4d15-9b99-09a30cb8fc13&lang=ru_RU"></script>
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
 <script src="assets/js/config.js"></script>
 <script>
@@ -169,6 +169,55 @@ let _emptyFolders = [];
 let _expandedFolders = new Set();
 let pendingInfoImage = null;
 let pendingInfoPlacemark = null;
+
+// Custom path editor state (API v3 has no built-in polyline editor)
+let _drawPathPoints = [];
+let _drawVertexMarkers = [];
+let _drawMapClickHandler = null;
+
+function setDrawMapClickHandler(handler) {
+    _drawMapClickHandler = handler;
+}
+
+function updateDrawVertexMarkers(pts, colorHex) {
+    _drawVertexMarkers.forEach(m => { if (map) map.removeChild(m); });
+    _drawVertexMarkers = [];
+    if (!pts || pts.length < 2 || !map) return;
+    const YMapMarker = ymaps3.YMapMarker;
+    const col = colorHex || '#0066ff';
+    pts.forEach((pt, i) => {
+        const el = document.createElement('div');
+        el.style.cssText = `width:14px;height:14px;border-radius:50%;background:${col};border:2px solid #000;cursor:grab;transform:translate(-50%,-50%);`;
+        const m = new YMapMarker({
+            coordinates: [pt[1], pt[0]],
+            draggable: true,
+            onDragMove: (newCoords) => {
+                const idx = _drawVertexMarkers.indexOf(m);
+                if (idx < 0) return false;
+                _drawPathPoints[idx] = [f6(newCoords[1]), f6(newCoords[0])];
+                m.update({ coordinates: newCoords });
+                if (cur) {
+                    cur.pts = [..._drawPathPoints];
+                    if (cur.line) cur.line.update({ geometry: { type: 'LineString', coordinates: swapCoords(_drawPathPoints) } });
+                    updI(cur);
+                }
+                return false;
+            }
+        }, el);
+        (function(idx) {
+            el.addEventListener('dblclick', (e) => {
+                e.stopPropagation();
+                if (pts.length <= 2) return;
+                _drawPathPoints.splice(idx, 1);
+                if (cur) { cur.pts = [..._drawPathPoints]; updatePointLine(cur); updI(cur); }
+                updateDrawVertexMarkers(_drawPathPoints, col);
+                if (_drawPathPoints.length < 2) $('addText').textContent = "Рисуйте путь...";
+            });
+        })(i);
+        map.addChild(m);
+        _drawVertexMarkers.push(m);
+    });
+}
 
 function openInstruction() {
     const modal = $('instructionModal');
@@ -314,11 +363,9 @@ const serializePoints = () => JSON.stringify(points.map(p => ({ id: p.id, color:
 
 const clearRouteObjects = () => {
     points.forEach(p => { 
-        map.geoObjects.remove(p.pm); 
-        map.geoObjects.remove(p.line); 
-        map.geoObjects.remove(p.lineOutline); 
-        if (p.lineAccent) map.geoObjects.remove(p.lineAccent);
-        if (p.infoPlacemarks) p.infoPlacemarks.forEach(m => map.geoObjects.remove(m));
+        if (p.pm) map.removeChild(p.pm);
+        if (p.line) map.removeChild(p.line);
+        if (p.infoPlacemarks) p.infoPlacemarks.forEach(m => map.removeChild(m));
     });
     points = [];
     activePoint = null;
@@ -345,13 +392,13 @@ const syncActiveListCard = () => {
 const setActivePoint = (p, center = false) => {
     activePoint = p || null;
     points.forEach(pt => {
-        const active = activePoint && pt === activePoint;
-        pt.line.options.set({ strokeOpacity: active ? 1 : 0.8, zIndex: active ? 2000 : 852 });
-        pt.lineOutline.options.set({ strokeWidth: active ? 8 : 6, zIndex: active ? 1999 : 850 });
-        pt.pm.options.set('zIndex', active ? 1800 : 1000);
+        updatePointLine(pt);
         updI(pt);
     });
-    if (center && activePoint?.pts?.length) map.setCenter(activePoint.pts[0]);
+    if (center && activePoint?.pts?.length) {
+        const pt = activePoint.pts[0];
+        map.update({ location: { center: [pt[1], pt[0]], duration: 400 } });
+    }
     syncActiveListCard();
 };
 const applySnapshot = (snapshot) => {
@@ -364,12 +411,20 @@ const applySnapshot = (snapshot) => {
 };
 
 let initialCenter = [56.3399, 43.9332];
-let currentLayerType = 'yandex#satellite';
+let currentLayerType = 'satellite';
+let schemeLayer = null, satelliteLayer = null;
 
 function toggleLayer() {
     if (!map) return;
-    currentLayerType = currentLayerType === 'yandex#satellite' ? 'yandex#map' : 'yandex#satellite';
-    map.setType(currentLayerType);
+    if (currentLayerType === 'satellite') {
+        if (satelliteLayer) map.removeChild(satelliteLayer);
+        if (schemeLayer) map.addChild(schemeLayer);
+        currentLayerType = 'scheme';
+    } else {
+        if (schemeLayer) map.removeChild(schemeLayer);
+        if (satelliteLayer) map.addChild(satelliteLayer);
+        currentLayerType = 'satellite';
+    }
 }
 
 function initMapWithGeolocation() {
@@ -387,7 +442,9 @@ function initMapWithGeolocation() {
     });
 }
 
-ymaps.ready(async () => {
+ymaps3.ready.then(async () => {
+    const { YMap, YMapDefaultSchemeLayer, YMapDefaultSatelliteLayer, YMapDefaultFeaturesLayer, YMapMarker, YMapFeature, YMapListener } = ymaps3;
+
     // Wait for VK async auth if needed
     if (!window.authPlatform && typeof vkBridge !== 'undefined') {
         try {
@@ -419,25 +476,52 @@ ymaps.ready(async () => {
     const userId = window.authLogin;
 
     const center = await initMapWithGeolocation();
-    map = new ymaps.Map("map", { center: center, zoom: 17, type: 'yandex#satellite', controls: [] });
-    userLocPlacemark = new ymaps.Placemark([0,0], {}, { iconLayout: 'default#image', iconImageHref: getUserLocSvg(), iconImageSize: [16,16], iconImageOffset: [-8,-8], zIndex: 5000, visible: false });
-    map.geoObjects.add(userLocPlacemark);
-    initGeolocation();
-    map.events.add('click', e => {
-        if(isAddingInfo && activePoint && pendingInfoImage) {
-            placeInfoPoint([f6(e.get('coords')[0]), f6(e.get('coords')[1])], activePoint);
-            return;
-        }
-        if(isAdd && tempNewPointData) {
-            let coords = e.get('coords');
-            const newPoint = addP(coords, { ...tempNewPointData });
-            pushHistorySnapshot();
-            updateSaveState();
-            setActivePoint(newPoint, false);
-            startDrawingForPoint(newPoint, true);
-            tempNewPointData = null;
-        }
+    map = new YMap(document.getElementById('map'), {
+        location: { center: [center[1], center[0]], zoom: 17 },
+        zoomRange: { min: 3, max: 20 },
+        behaviors: ['drag', 'scrollZoom', 'dblClick', 'pinchZoom', 'pinchRotate']
     });
+
+
+    satelliteLayer = new YMapDefaultSatelliteLayer({});
+    schemeLayer = new YMapDefaultSchemeLayer({});
+    map.addChild(satelliteLayer);
+    map.addChild(new YMapDefaultFeaturesLayer({ zIndex: 100000 }));
+
+    const userEl = document.createElement('div');
+    userEl.style.cssText = 'width:16px;height:16px;transform:translate(-50%,-50%);';
+    userEl.innerHTML = '<img src="' + getUserLocSvg() + '" width="16" height="16" style="display:block" />';
+    userLocPlacemark = new YMapMarker({ coordinates: [0, 0] }, userEl);
+    map.addChild(userLocPlacemark);
+    initGeolocation();
+
+    map.addChild(new YMapListener({
+        onClick: (object, event) => {
+            if (object) return;
+            if (!event || !event.coordinates) return;
+            const lonLat = event.coordinates;
+            const latLon = [f6(lonLat[1]), f6(lonLat[0])];
+
+            if (isDrawing && _drawMapClickHandler) {
+                _drawMapClickHandler(latLon);
+                return;
+            }
+
+            if(isAddingInfo && activePoint && pendingInfoImage) {
+                placeInfoPoint(latLon, activePoint);
+                return;
+            }
+            if(isAdd && tempNewPointData) {
+                const newPoint = addP(latLon, { ...tempNewPointData });
+                pushHistorySnapshot();
+                updateSaveState();
+                setActivePoint(newPoint, false);
+                startDrawingForPoint(newPoint, true);
+                tempNewPointData = null;
+            }
+        }
+    }));
+
     initColorDropdown('listColorDropdown', (h, n) => {
         if(activeListPoint) {
             pushHistorySnapshot();
@@ -446,7 +530,9 @@ ymaps.ready(async () => {
             const cat = COLORS[n] || {};
             btn.querySelector('.swatch').style.background = h;
             btn.querySelector('.cat-label').textContent = cat.label || n;
-            if (p.line) { p.line.options.set('strokeColor', h); p.lineOutline.options.set('strokeColor', '#000000'); updI(p); } activeListPoint = null;
+            updatePointLine(p);
+            updI(p);
+            activeListPoint = null;
             pushHistorySnapshot();
             updateSaveState();
         }
@@ -473,8 +559,7 @@ const initGeolocation = () => {
         navigator.geolocation.watchPosition(p => {
             const coords = [p.coords.latitude, p.coords.longitude];
             if (userLocPlacemark) {
-                userLocPlacemark.geometry.setCoordinates(coords);
-                userLocPlacemark.options.set('visible', true);
+                userLocPlacemark.update({ coordinates: [coords[1], coords[0]] });
             }
 
         }, null, { enableHighAccuracy: true, maximumAge: 5000 });
@@ -853,7 +938,7 @@ const loadRoute = async (routeName) => {
         clearRouteObjects();
         curRoute = routeName;
         data.forEach(d => { const p = addP(d.pts[0], d, true); renderInfoPlacemarks(p); });
-        if(points.length) map.setCenter(points[0].pts[0]);
+        if(points.length) map.update({ location: { center: [points[0].pts[0][1], points[0].pts[0][0]], duration: 0 } });
         recalculateIds();
         seedHistory();
         lastSavedSnapshot = serializePoints();
@@ -1038,8 +1123,39 @@ async function playText(text, voice_type = 'command', btn = null) {
     }
 }
 
+function swapCoords(pts) {
+    return pts.map(pt => [pt[1], pt[0]]);
+}
+
+
+
+function updatePointLine(p) {
+    if (p.line && map) { map.removeChild(p.line); p.line = null; }
+    if (!p.pts || p.pts.length < 2) return;
+    const { YMapFeature } = ymaps3;
+    const hex = COLORS[p.color]?.hex || '#FFD700';
+    const isCurrent = p === activePoint;
+    const coords = swapCoords(p.pts);
+    const strokes = [];
+    strokes.push({ width: 4, color: hex });
+    if (isCurrent) strokes.push({ width: 6, color: '#A4E84A' });
+    strokes.push({ width: isCurrent ? 8 : 6, color: '#000000' });
+    p.line = new YMapFeature({
+        geometry: { type: 'LineString', coordinates: coords },
+        style: { stroke: strokes }
+    });
+    map.addChild(p.line);
+}
+
 function addP(coords, data = null, silent = false) {
+    const { YMapMarker, YMapFeature } = ymaps3;
     const ptsData = data?.pts || [coords];
+    const hex = COLORS[data?.color || 'Gold']?.hex || '#FFD700';
+    
+    const el = document.createElement('div');
+    el.style.cssText = 'width:40px;height:40px;transform:translate(-50%,-50%);cursor:pointer;';
+    el.dataset.pointId = data?.id || (points.length + 1);
+    
     const p = { 
         id: data?.id || (points.length + 1), 
         color: data?.color || 'Gold', 
@@ -1048,41 +1164,26 @@ function addP(coords, data = null, silent = false) {
         pts: ptsData,
         info: data?.info || [],
         infoPlacemarks: [],
-        pm: new ymaps.Placemark(coords, {}, { iconLayout: 'default#imageWithContent', iconImageSize: [40,40], iconImageOffset: [-20,-20], zIndex: 1000 }), 
-        line: new ymaps.Polyline(ptsData, {}, { strokeWidth: 4, strokeOpacity: 1, zIndex: 852, interactive: false }), 
-        lineOutline: new ymaps.Polyline(ptsData, {}, { strokeWidth: 6, strokeOpacity: 1, zIndex: 850, interactive: false }), 
-        lineAccent: null 
+        pm: new YMapMarker({ coordinates: [coords[1], coords[0]] }, el),
+        line: null
     };
-    p.line.options.set('strokeColor', COLORS[p.color].hex);
-    p.lineOutline.options.set('strokeColor', '#000000');
     
-    p.pm.geometry.events.add('change', () => { 
-        const nc = p.pm.geometry.getCoordinates(), pts = p.line.geometry.getCoordinates(); 
-        if(pts.length) { 
-            pts[0] = nc; 
-            p.line.geometry.setCoordinates(pts); 
-            p.lineOutline.geometry.setCoordinates(pts);
-            if(p.lineAccent) p.lineAccent.geometry.setCoordinates(pts);
-        } 
-    });
-    p.line.geometry.events.add('change', () => {
-        const coords = p.line.geometry.getCoordinates();
-        p.pts = coords.map(pt => [f6(pt[0]), f6(pt[1])]);
-        p.lineOutline.geometry.setCoordinates(coords);
-        if(p.lineAccent) p.lineAccent.geometry.setCoordinates(coords);
-        if(isDrawing && coords.length > 0) {
-            const pmCoords = p.pm.geometry.getCoordinates();
-            if(Math.abs(pmCoords[0] - coords[0][0]) > 0.000001 || Math.abs(pmCoords[1] - coords[0][1]) > 0.000001) {
-                p.pm.geometry.setCoordinates(coords[0]);
-            }
-        }
-        if(isDrawing && p.pts.length > 1) { $('addText').textContent = "Завершить рисование пути"; }
-        updI(p);
-    });
-    p.pm.events.add('click', () => { setActivePoint(p, true); if(!isAdd && !isDrawing) openEditPointModal(p); });
-    map.geoObjects.add(p.lineOutline);
-    map.geoObjects.add(p.pm);
-    map.geoObjects.add(p.line);
+    el.addEventListener('click', () => { setActivePoint(p, true); if(!isAdd && !isDrawing) openEditPointModal(p); });
+    
+    if (ptsData.length >= 2) {
+        const lineCoords = swapCoords(ptsData);
+        const strokes = [];
+        strokes.push({ width: 4, color: hex });
+        strokes.push({ width: 6, color: '#000000' });
+        p.line = new YMapFeature({
+            geometry: { type: 'LineString', coordinates: lineCoords },
+            style: { stroke: strokes }
+        });
+    }
+    
+    map.addChild(p.pm);
+    if (p.line) map.addChild(p.line);
+    
     points.push(p);
     updI(p);
     if (!silent) updateSaveState();
@@ -1092,25 +1193,21 @@ function addP(coords, data = null, silent = false) {
 function renderInfoPlacemarks(p) {
     clearInfoPlacemarks(p);
     if (!p.info || !p.info.length) return;
+    const { YMapMarker } = ymaps3;
     p.info.forEach((inf, idx) => {
-        const coords = [inf.lat, inf.lon];
-        const img = inf.image || '';
-        const pm = new ymaps.Placemark(coords, {}, {
-            iconLayout: 'default#image',
-            iconImageHref: `znaki/${img}`,
-            iconImageSize: [32, 32],
-            iconImageOffset: [-16, -16],
-            zIndex: 900
-        });
-        pm.events.add('click', () => editInfoPoint(p, idx));
-        map.geoObjects.add(pm);
+        const el = document.createElement('div');
+        el.style.cssText = 'width:32px;height:32px;transform:translate(-50%,-50%);cursor:pointer;';
+        el.innerHTML = `<img src="znaki/${inf.image || ''}" width="32" height="32" style="display:block" />`;
+        const pm = new YMapMarker({ coordinates: [inf.lon, inf.lat] }, el);
+        el.addEventListener('click', () => editInfoPoint(p, idx));
+        map.addChild(pm);
         p.infoPlacemarks.push(pm);
     });
 }
 
 function clearInfoPlacemarks(p) {
     if (p.infoPlacemarks) {
-        p.infoPlacemarks.forEach(m => map.geoObjects.remove(m));
+        p.infoPlacemarks.forEach(m => map.removeChild(m));
         p.infoPlacemarks = [];
     }
 }
@@ -1151,30 +1248,28 @@ function placeInfoPoint(coords, p) {
     const image = pendingInfoImage;
     if (!image) return;
     if (pendingInfoPlacemark) {
-        map.geoObjects.remove(pendingInfoPlacemark);
+        map.removeChild(pendingInfoPlacemark);
         pendingInfoPlacemark = null;
     }
-    pendingInfoPlacemark = new ymaps.Placemark(coords, {}, {
-        iconLayout: 'default#image',
-        iconImageHref: `znaki/${image}`,
-        iconImageSize: [32, 32],
-        iconImageOffset: [-16, -16],
-        zIndex: 1100,
-        draggable: true
-    });
-    map.geoObjects.add(pendingInfoPlacemark);
+    const { YMapMarker } = ymaps3;
+    const el = document.createElement('div');
+    el.style.cssText = 'width:32px;height:32px;transform:translate(-50%,-50%);';
+    el.innerHTML = `<img src="znaki/${image}" width="32" height="32" style="display:block" />`;
+    pendingInfoPlacemark = new YMapMarker({ coordinates: [coords[1], coords[0]] }, el);
+    map.addChild(pendingInfoPlacemark);
+    pendingInfoPlacemark._coords = coords;
     $('addText').textContent = "Завершить установку знака";
 }
 
 async function finalizeInfoPoint() {
     if (!pendingInfoPlacemark || !activePoint) return;
     try {
-        const coords = pendingInfoPlacemark.geometry.getCoordinates();
+        const coords = pendingInfoPlacemark._coords || [0, 0];
         const lat = f6(coords[0]);
         const lon = f6(coords[1]);
         const image = pendingInfoImage || '';
         activePoint.info.push({ lat, lon, image });
-        map.geoObjects.remove(pendingInfoPlacemark);
+        map.removeChild(pendingInfoPlacemark);
         pendingInfoPlacemark = null;
         renderInfoPlacemarks(activePoint);
         updateInfoPointsUI(activePoint);
@@ -1199,12 +1294,12 @@ function stopAddingInfo() {
     isAddingInfo = false;
     pendingInfoImage = null;
     if (pendingInfoPlacemark) {
-        map.geoObjects.remove(pendingInfoPlacemark);
+        map.removeChild(pendingInfoPlacemark);
         pendingInfoPlacemark = null;
     }
     $('addText').textContent = "Добавить новую точку";
     $('addMarkerBtn').classList.remove('active');
-    if (map && map.setCursor) map.setCursor('grab');
+    document.getElementById('map').style.cursor = '';
 }
 
 function editInfoPoint(p, idx) {
@@ -1238,18 +1333,30 @@ const startDrawingForPoint = (p, isNewPoint = false) => {
     $('addMarkerBtn').classList.remove('active');
     $('addMarkerBtn').classList.add('drawing');
     cur = p;
+    _drawPathPoints = [...(p.pts || [])];
     setActivePoint(p, !isNewPoint);
-    p.line.editor.startDrawing();
-    p.pm.options.set('draggable', true);
+    updateDrawVertexMarkers(_drawPathPoints, COLORS[p.color]?.hex);
     updateGpsBtnVisibility();
+    setDrawMapClickHandler((latLon) => {
+        _drawPathPoints.push(latLon);
+        p.pts = [..._drawPathPoints];
+        updatePointLine(p);
+        updI(p);
+        updateDrawVertexMarkers(_drawPathPoints, COLORS[p.color]?.hex);
+        if (_drawPathPoints.length > 1) {
+            $('addText').textContent = "Завершить рисование пути";
+        }
+    });
 };
 const stopDrawingMode = async () => {
+    setDrawMapClickHandler(null);
+    updateDrawVertexMarkers([]);
     if (cur) {
-        cur.pm.options.set('draggable', false);
-        cur.line.editor.stopEditing();
+        cur.pts = [..._drawPathPoints];
         pushHistorySnapshot();
         updateSaveState();
     }
+    _drawPathPoints = [];
     isDrawing = false;
     $('addText').textContent = "Добавить новую точку";
     $('addMarkerBtn').classList.remove('drawing');
@@ -1276,18 +1383,19 @@ function toggleGpsMode() {
             const coords = [position.coords.latitude, position.coords.longitude];
             if (isAdd && tempNewPointData) {
                 const newPoint = addP(coords, { ...tempNewPointData });
-                map.setCenter(coords);
+                map.update({ location: { center: [coords[1], coords[0]], duration: 0 } });
                 pushHistorySnapshot();
                 updateSaveState();
                 setActivePoint(newPoint, false);
                 startDrawingForPoint(newPoint, true);
                 tempNewPointData = null;
             } else if (isDrawing && cur) {
-                const pts = cur.line.geometry.getCoordinates();
-                pts.push(coords);
-                cur.line.geometry.setCoordinates(pts);
-                cur.pts = pts.map(pt => [f6(pt[0]), f6(pt[1])]);
-                map.setCenter(coords);
+                _drawPathPoints.push(coords);
+                cur.pts = [..._drawPathPoints];
+                updatePointLine(cur);
+                updI(cur);
+                updateDrawVertexMarkers(_drawPathPoints, COLORS[cur.color]?.hex);
+                map.update({ location: { center: [coords[1], coords[0]], duration: 0 } });
             }
         },
         () => {},
@@ -1295,34 +1403,14 @@ function toggleGpsMode() {
     );
 }
 
-const stopAdd = () => { isAdd = false; tempNewPointData = null; $('addText').textContent = "Добавить новую точку"; $('addMarkerBtn').classList.remove('active'); map.setCursor('grab'); updateGpsBtnVisibility(); };
+const stopAdd = () => { isAdd = false; tempNewPointData = null; $('addText').textContent = "Добавить новую точку"; $('addMarkerBtn').classList.remove('active'); document.getElementById('map').style.cursor = ''; updateGpsBtnVisibility(); };
 const updI = p => { 
     const isCurrent = p === activePoint;
     const hasComm = !!p.comm;
     const az = p.pts?.length >= 2 ? calcAzimuth(p.pts[0], p.pts[1]) : 0;
-    p.pm.options.set('iconImageHref', getNavIconSvg(COLORS[p.color].hex, p.id, az, false, isCurrent, hasComm));
-    
-    if (p.pts?.length >= 2) {
-        if (isCurrent) {
-            if (!p.lineAccent) {
-                p.lineAccent = new ymaps.Polyline(p.pts, {}, { strokeWidth: 6, strokeOpacity: 1, zIndex: 1998, interactive: false });
-                p.lineAccent.options.set('strokeColor', '#A4E84A');
-                map.geoObjects.add(p.lineAccent);
-            } else {
-                p.lineAccent.geometry.setCoordinates(p.pts);
-            }
-        } else {
-            if (p.lineAccent) {
-                map.geoObjects.remove(p.lineAccent);
-                p.lineAccent = null;
-            }
-        }
-    } else {
-        if (p.lineAccent) {
-            map.geoObjects.remove(p.lineAccent);
-            p.lineAccent = null;
-        }
-    }
+    const svgUrl = getNavIconSvg(COLORS[p.color].hex, p.id, az, false, isCurrent, hasComm);
+    const el = p.pm.element;
+    if (el) el.innerHTML = `<img src="${svgUrl}" width="40" height="40" style="display:block" />`;
 };
 function recalculateIds() {
     points.forEach((p, i) => { p.id = i + 1; updI(p); });
@@ -1398,10 +1486,8 @@ function createPointCard(p, single = false) {
 }
 async function delPoint(p) {
     points = points.filter(x => x !== p);
-    map.geoObjects.remove(p.pm);
-    map.geoObjects.remove(p.line);
-    map.geoObjects.remove(p.lineOutline);
-    if(p.lineAccent) map.geoObjects.remove(p.lineAccent);
+    if (p.pm) map.removeChild(p.pm);
+    if (p.line) map.removeChild(p.line);
     clearInfoPlacemarks(p);
     if (activePoint === p) activePoint = null;
     recalculateIds();
@@ -1414,10 +1500,17 @@ function startEditPath(p) {
     isDrawing = true;
     $('addText').textContent = "Завершить рисование пути";
     $('addMarkerBtn').classList.add('drawing');
-    p.pm.options.set('draggable', true);
-    p.line.editor.startEditing();
+    _drawPathPoints = [...(p.pts || [])];
     setActivePoint(p, true);
+    updateDrawVertexMarkers(_drawPathPoints, COLORS[p.color]?.hex);
     updateGpsBtnVisibility();
+    setDrawMapClickHandler((latLon) => {
+        _drawPathPoints.push(latLon);
+        p.pts = [..._drawPathPoints];
+        updatePointLine(p);
+        updI(p);
+        updateDrawVertexMarkers(_drawPathPoints, COLORS[p.color]?.hex);
+    });
 }
 
 function openPointsOrderModal() {
@@ -1513,7 +1606,7 @@ function selectZnak(file) {
     $('znakiModal').classList.remove('visible');
     $('addText').textContent = "Кликните на карте для установки знака";
     $('addMarkerBtn').classList.add('active');
-    if (map && map.setCursor) map.setCursor('crosshair');
+    document.getElementById('map').style.cursor = 'crosshair';
 }
 function closeZnakiSelector() {
     if (isAddingInfo) stopAddingInfo();
