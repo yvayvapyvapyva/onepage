@@ -186,8 +186,15 @@ function updateDrawVertexMarkers(pts, colorHex) {
     const YMapMarker = ymaps3.YMapMarker;
     const col = colorHex || '#0066ff';
     pts.forEach((pt, i) => {
-        const el = document.createElement('div');
-        el.style.cssText = `width:14px;height:14px;border-radius:50%;background:${col};border:2px solid #000;cursor:grab;transform:translate(-50%,-50%);`;
+        const wrap = document.createElement('div');
+        wrap.style.cssText = 'position:relative;transform:translate(-50%,-50%);line-height:0;';
+        const dot = document.createElement('div');
+        dot.style.cssText = `width:16px;height:16px;border-radius:50%;background:${col};border:2.5px solid #000;cursor:grab;`;
+        const del = document.createElement('div');
+        del.textContent = '×';
+        del.style.cssText = 'position:absolute;top:-50px;left:50%;transform:translateX(-50%);width:36px;height:36px;border-radius:4px;background:#ff3b30;color:#fff;font-size:24px;font-weight:700;line-height:36px;text-align:center;cursor:pointer;display:none;user-select:none;z-index:10;';
+        wrap.appendChild(dot);
+        wrap.appendChild(del);
         const m = new YMapMarker({
             coordinates: [pt[1], pt[0]],
             draggable: true,
@@ -203,16 +210,29 @@ function updateDrawVertexMarkers(pts, colorHex) {
                 }
                 return false;
             }
-        }, el);
+        }, wrap);
         (function(idx) {
-            el.addEventListener('dblclick', (e) => {
-                e.stopPropagation();
+            function removeVertex() {
                 if (pts.length <= 2) return;
                 _drawPathPoints.splice(idx, 1);
                 if (cur) { cur.pts = [..._drawPathPoints]; updatePointLine(cur); updI(cur); }
                 updateDrawVertexMarkers(_drawPathPoints, col);
                 if (_drawPathPoints.length < 2) $('addText').textContent = "Рисуйте путь...";
+            }
+            dot.addEventListener('click', (e) => {
+                e.stopPropagation();
+                _drawVertexMarkers.forEach(m => {
+                    const wrap = m.element;
+                    if (!wrap) return;
+                    const d = wrap.lastElementChild;
+                    if (d) d.style.display = 'none';
+                    const dt = wrap.firstElementChild;
+                    if (dt) dt.style.borderColor = '#000';
+                });
+                del.style.display = 'block';
+                dot.style.borderColor = '#ff3b30';
             });
+            del.addEventListener('click', (e) => { e.stopPropagation(); removeVertex(); });
         })(i);
         map.addChild(m);
         _drawVertexMarkers.push(m);
@@ -495,14 +515,30 @@ ymaps3.ready.then(async () => {
     map.addChild(userLocPlacemark);
     initGeolocation();
 
+    document.addEventListener('click', () => {
+        _drawVertexMarkers.forEach(m => {
+            const wrap = m.element;
+            if (!wrap) return;
+            const d = wrap.lastElementChild;
+            if (d) d.style.display = 'none';
+            const dot = wrap.firstElementChild;
+            if (dot) dot.style.borderColor = '#000';
+        });
+    }, true);
     map.addChild(new YMapListener({
         onClick: (object, event) => {
-            if (object) return;
+            if (object?.type === 'marker') return;
             if (!event || !event.coordinates) return;
             const lonLat = event.coordinates;
             const latLon = [f6(lonLat[1]), f6(lonLat[0])];
 
             if (isDrawing && _drawMapClickHandler) {
+                if (object?.type === 'feature' && object.entity === cur?.line && _drawPathPoints.length >= 2) {
+                    const segIdx = findNearestSegment(_drawPathPoints, latLon);
+                    _drawPathPoints.splice(segIdx + 1, 0, latLon);
+                } else {
+                    _drawPathPoints.push(latLon);
+                }
                 _drawMapClickHandler(latLon);
                 return;
             }
@@ -1127,6 +1163,20 @@ function swapCoords(pts) {
     return pts.map(pt => [pt[1], pt[0]]);
 }
 
+function findNearestSegment(pts, latLon) {
+    let minDist = Infinity, minIdx = 0;
+    for (let i = 0; i < pts.length - 1; i++) {
+        const [ax, ay] = pts[i], [bx, by] = pts[i + 1];
+        const dx = bx - ax, dy = by - ay;
+        const lenSq = dx * dx + dy * dy;
+        if (lenSq === 0) continue;
+        let t = ((latLon[0] - ax) * dx + (latLon[1] - ay) * dy) / lenSq;
+        t = Math.max(0, Math.min(1, t));
+        const d = Math.hypot(latLon[0] - (ax + t * dx), latLon[1] - (ay + t * dy));
+        if (d < minDist) { minDist = d; minIdx = i; }
+    }
+    return minIdx;
+}
 
 
 function updatePointLine(p) {
@@ -1337,8 +1387,7 @@ const startDrawingForPoint = (p, isNewPoint = false) => {
     setActivePoint(p, !isNewPoint);
     updateDrawVertexMarkers(_drawPathPoints, COLORS[p.color]?.hex);
     updateGpsBtnVisibility();
-    setDrawMapClickHandler((latLon) => {
-        _drawPathPoints.push(latLon);
+    setDrawMapClickHandler(() => {
         p.pts = [..._drawPathPoints];
         updatePointLine(p);
         updI(p);
@@ -1411,6 +1460,7 @@ const updI = p => {
     const svgUrl = getNavIconSvg(COLORS[p.color].hex, p.id, az, false, isCurrent, hasComm);
     const el = p.pm.element;
     if (el) el.innerHTML = `<img src="${svgUrl}" width="40" height="40" style="display:block" />`;
+    if (p.pts?.length && p.pm.update) p.pm.update({ coordinates: [p.pts[0][1], p.pts[0][0]] });
 };
 function recalculateIds() {
     points.forEach((p, i) => { p.id = i + 1; updI(p); });
@@ -1504,8 +1554,7 @@ function startEditPath(p) {
     setActivePoint(p, true);
     updateDrawVertexMarkers(_drawPathPoints, COLORS[p.color]?.hex);
     updateGpsBtnVisibility();
-    setDrawMapClickHandler((latLon) => {
-        _drawPathPoints.push(latLon);
+    setDrawMapClickHandler(() => {
         p.pts = [..._drawPathPoints];
         updatePointLine(p);
         updI(p);
