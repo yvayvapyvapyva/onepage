@@ -547,7 +547,7 @@ ymaps3.ready.then(async () => {
         });
     }, true);
     map.addChild(new YMapListener({
-        onClick: (object, event) => {
+        onFastClick: (object, event) => {
             if (object?.type === 'marker') return;
             if (!event || !event.coordinates) return;
             const lonLat = event.coordinates;
