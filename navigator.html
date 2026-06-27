@@ -217,7 +217,7 @@ const APP = {
     navPoints: [], navCurrentIndex: 0, navPreviewIndex: -1,
     navAudio: new Audio(), _commentAudio: new Audio(),
     navConfig: { TRIGGER_DIST: 25, AZ_TOLERANCE: 45, SPEED_THRESHOLD: 2, SHOCK_THRESHOLD: 1, SHOCK_PHRASE: 'Сильный удар!', SPEED_ALERT_THRESHOLD: 58, SPEED_ALERT_PHRASE: 'Превышена максимальная скорость!' },
-    _isScheme: true, _schemeLayer: null, _featuresLayer: null, _buildings: null,
+    _isScheme: false, _schemeLayer: null, _satLayer: null, _featuresLayer: null, _buildings: null,
     _driveActive: false, _driveRaf: null, _driveMarker: null, _driveShowFrom: -1,
     _driveSpeed: 90,
     _userMarkerEl: null, markerRotation: 0,
@@ -1243,9 +1243,9 @@ ymaps3.ready.then(async () => {
 
     APP._schemeLayer = new YMapDefaultSchemeLayer({});
     APP._featuresLayer = new YMapDefaultFeaturesLayer({ zIndex: 100000 });
-    APP.map.addChild(APP._schemeLayer);
+    APP._satLayer = new YMapDefaultSatelliteLayer({});
+    APP.map.addChild(APP._satLayer);
     APP.map.addChild(APP._featuresLayer);
-    $('mapTypeBtn').classList.add('api-v3');
 
     try {
         const { YMapBuildings } = await ymaps3.import('@yandex/ymaps3-buildings');
