@@ -1235,8 +1235,18 @@ document.addEventListener('DOMContentLoaded', () => {
 ymaps3.ready.then(async () => {
     const { YMap, YMapDefaultSchemeLayer, YMapDefaultFeaturesLayer, YMapDefaultSatelliteLayer, YMapMarker, YMapControls } = ymaps3;
 
+    let initCenter = [43.9968, 56.3269];
+    if (navigator.geolocation) {
+        try {
+            const pos = await new Promise((resolve, reject) => {
+                navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, maximumAge: 10000, timeout: 15000 });
+            });
+            initCenter = [pos.coords.longitude, pos.coords.latitude];
+        } catch (e) {}
+    }
+
     APP.map = new YMap(document.getElementById('map'), {
-        location: { center: [43.9968, 56.3269], zoom: 17 },
+        location: { center: initCenter, zoom: 17 },
         zoomRange: { min: 3, max: 20 },
         behaviors: ['drag', 'scrollZoom', 'dblClick', 'pinchZoom', 'pinchRotate', 'pinchTilt', 'mouseTilt', 'mouseRotate']
     });
