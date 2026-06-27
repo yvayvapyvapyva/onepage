@@ -615,7 +615,7 @@ function ensureMotionTracking() {
 
 function updateShockBarVisibility() {
     const bar = $('shockBar');
-    if (bar) bar.style.display = APP.navConfig.SHOCK_THRESHOLD > 0 ? '' : 'none';
+    if (bar) bar.style.display = APP.navConfig.SHOCK_THRESHOLD > 0 ? 'block' : 'none';
 }
 
 const SHOCK_DEBOUNCE = 3000;
