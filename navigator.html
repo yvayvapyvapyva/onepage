@@ -229,7 +229,8 @@ const APP = {
     _lastSpeedAlertTime: 0,
     _motionTracked: false,
     _shockDisplayG: 0,
-    _shockPeakTime: 0
+    _shockPeakTime: 0,
+    _simFirstRun: true
 };
 
 const $ = id => document.getElementById(id);
@@ -1308,6 +1309,17 @@ ymaps3.ready.then(async () => {
             if (!p || !p.pts || p.pts.length < 2) {
                 showToast('У текущей точки нет пути для симуляции', 'info');
                 return;
+            }
+            if (APP._simFirstRun) {
+                APP._simFirstRun = false;
+                const firstCoord = p.pts[0];
+                APP.map.update({ location: { center: [firstCoord[1], firstCoord[0]], zoom: 19 }, camera: { tilt: 60 }, duration: 400 });
+                if (APP._isScheme) toggleMapType();
+                if (!APP._is3D) {
+                    APP._is3D = true;
+                    APP.lastTilt = 60;
+                    $('tiltBtn').textContent = '3D';
+                }
             }
             $('playBtn').classList.add('active');
             const startSim = () => {
