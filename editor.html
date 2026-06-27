@@ -179,6 +179,19 @@ function setDrawMapClickHandler(handler) {
     _drawMapClickHandler = handler;
 }
 
+function updateHitLine(p) {
+    if (!p || !map) return;
+    if (p._hitLine && map) map.removeChild(p._hitLine);
+    p._hitLine = null;
+    if (!p.pts || p.pts.length < 2) return;
+    const { YMapFeature } = ymaps3;
+    p._hitLine = new YMapFeature({
+        geometry: { type: 'LineString', coordinates: swapCoords(p.pts) },
+        style: { stroke: [{ width: 30, color: 'rgba(128,128,128,0.2)' }] }
+    });
+    map.addChild(p._hitLine);
+}
+
 function updateDrawVertexMarkers(pts, colorHex) {
     _drawVertexMarkers.forEach(m => { if (map) map.removeChild(m); });
     _drawVertexMarkers = [];
@@ -189,7 +202,13 @@ function updateDrawVertexMarkers(pts, colorHex) {
         const wrap = document.createElement('div');
         wrap.style.cssText = 'position:relative;transform:translate(-50%,-50%);line-height:0;';
         const dot = document.createElement('div');
-        dot.style.cssText = `width:16px;height:16px;border-radius:50%;background:${col};border:2.5px solid #000;cursor:grab;`;
+        dot.style.cssText = `width:30px;height:30px;border-radius:50%;cursor:grab;display:flex;align-items:center;justify-content:center;position:relative;`;
+        const bg = document.createElement('div');
+        bg.style.cssText = `position:absolute;inset:0;border-radius:50%;background:${col};opacity:0.2;pointer-events:none;`;
+        dot.appendChild(bg);
+        const inner = document.createElement('div');
+        inner.style.cssText = `width:10px;height:10px;border-radius:50%;border:1px solid #000;background:${col};pointer-events:none;position:relative;`;
+        dot.appendChild(inner);
         const del = document.createElement('div');
         del.textContent = '×';
         del.style.cssText = 'position:absolute;top:-50px;left:50%;transform:translateX(-50%);width:36px;height:36px;border-radius:4px;background:#ff3b30;color:#fff;font-size:24px;font-weight:700;line-height:36px;text-align:center;cursor:pointer;display:none;user-select:none;z-index:10;';
@@ -206,6 +225,7 @@ function updateDrawVertexMarkers(pts, colorHex) {
                 if (cur) {
                     cur.pts = [..._drawPathPoints];
                     if (cur.line) cur.line.update({ geometry: { type: 'LineString', coordinates: swapCoords(_drawPathPoints) } });
+                    if (cur._hitLine) cur._hitLine.update({ geometry: { type: 'LineString', coordinates: swapCoords(_drawPathPoints) } });
                     updI(cur);
                 }
                 return false;
@@ -215,7 +235,7 @@ function updateDrawVertexMarkers(pts, colorHex) {
             function removeVertex() {
                 if (pts.length <= 2) return;
                 _drawPathPoints.splice(idx, 1);
-                if (cur) { cur.pts = [..._drawPathPoints]; updatePointLine(cur); updI(cur); }
+                if (cur) { cur.pts = [..._drawPathPoints]; updatePointLine(cur); updateHitLine(cur); updI(cur); }
                 updateDrawVertexMarkers(_drawPathPoints, col);
                 if (_drawPathPoints.length < 2) $('addText').textContent = "Рисуйте путь...";
             }
@@ -385,6 +405,7 @@ const clearRouteObjects = () => {
     points.forEach(p => { 
         if (p.pm) map.removeChild(p.pm);
         if (p.line) map.removeChild(p.line);
+        if (p._hitLine) map.removeChild(p._hitLine);
         if (p.infoPlacemarks) p.infoPlacemarks.forEach(m => map.removeChild(m));
     });
     points = [];
@@ -533,7 +554,7 @@ ymaps3.ready.then(async () => {
             const latLon = [f6(lonLat[1]), f6(lonLat[0])];
 
             if (isDrawing && _drawMapClickHandler) {
-                if (object?.type === 'feature' && object.entity === cur?.line && _drawPathPoints.length >= 2) {
+                if (object?.type === 'feature' && (object.entity === cur?.line || object.entity === cur?._hitLine) && _drawPathPoints.length >= 2) {
                     const segIdx = findNearestSegment(_drawPathPoints, latLon);
                     _drawPathPoints.splice(segIdx + 1, 0, latLon);
                 } else {
@@ -1394,12 +1415,14 @@ const startDrawingForPoint = (p, isNewPoint = false) => {
     $('addMarkerBtn').classList.add('drawing');
     cur = p;
     _drawPathPoints = [...(p.pts || [])];
+    updateHitLine(cur);
     setActivePoint(p, !isNewPoint);
     updateDrawVertexMarkers(_drawPathPoints, COLORS[p.color]?.hex);
     updateGpsBtnVisibility();
     setDrawMapClickHandler(() => {
         p.pts = [..._drawPathPoints];
         updatePointLine(p);
+        updateHitLine(p);
         updI(p);
         updateDrawVertexMarkers(_drawPathPoints, COLORS[p.color]?.hex);
         if (_drawPathPoints.length > 1) {
@@ -1419,6 +1442,9 @@ const stopDrawingMode = async () => {
     isDrawing = false;
     $('addText').textContent = "Добавить новую точку";
     $('addMarkerBtn').classList.remove('drawing');
+    if (cur) {
+        if (cur._hitLine && map) { map.removeChild(cur._hitLine); cur._hitLine = null; }
+    }
     cur = null;
     updateGpsBtnVisibility();
     await saveGist();
@@ -1550,6 +1576,7 @@ function delPoint(p) {
     points = points.filter(x => x !== p);
     if (p.pm) map.removeChild(p.pm);
     if (p.line) map.removeChild(p.line);
+    if (p._hitLine) map.removeChild(p._hitLine);
     clearInfoPlacemarks(p);
     if (activePoint === p) activePoint = null;
     recalculateIds();
@@ -1561,12 +1588,14 @@ function startEditPath(p) {
     $('addText').textContent = "Завершить рисование пути";
     $('addMarkerBtn').classList.add('drawing');
     _drawPathPoints = [...(p.pts || [])];
+    updateHitLine(cur);
     setActivePoint(p, true);
     updateDrawVertexMarkers(_drawPathPoints, COLORS[p.color]?.hex);
     updateGpsBtnVisibility();
     setDrawMapClickHandler(() => {
         p.pts = [..._drawPathPoints];
         updatePointLine(p);
+        updateHitLine(p);
         updI(p);
         updateDrawVertexMarkers(_drawPathPoints, COLORS[p.color]?.hex);
     });
