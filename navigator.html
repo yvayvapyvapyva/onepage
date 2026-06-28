@@ -407,21 +407,18 @@ function driveAlongPath(fromIdx) {
     $('speedSliderWrap').style.display = 'flex';
     $('speedValue').textContent = APP._driveSpeed;
     let simulatedDist = 0;
-    let smoothAz = APP.lastAz;
-    try { smoothAz = -(APP.map.azimuth * 180 / Math.PI); } catch (e) {
-        if (path.length >= 2) smoothAz = calcAzimuth(path[0], path[1]);
-    }
+    let currentSeg = 0;
+    let currentAz = calcAzimuth(path[0], path[1]);
     let lastFrameTime = performance.now();
-    const CAMERA_INTERVAL = 500;
-    let lastCameraUpdate = -CAMERA_INTERVAL;
-    let prevPos = { lat: path[0][0], lon: path[0][1] };
-    let nextPos = { lat: path[0][0], lon: path[0][1] };
 
     const markerEl = document.createElement('div');
     markerEl.innerHTML = '<svg width="18" height="18" viewBox="0 0 18 18"><circle cx="9" cy="9" r="7" fill="#FF3B30" stroke="#fff" stroke-width="2.5"/></svg>';
     markerEl.style.transform = 'translate(-50%,-50%)';
     APP._driveMarker = new ymaps3.YMapMarker({ coordinates: [path[0][1], path[0][0]] }, markerEl);
     APP.map.addChild(APP._driveMarker);
+
+    const firstDur = (dists[1] - dists[0]) / (APP._driveSpeed / 3.6) * 1000;
+    setMapLocation([path[1][0], path[1][1]], 19, currentAz, Math.max(firstDur, 500));
 
     function getPos(dist) {
         if (dist >= totalDist) {
@@ -447,29 +444,24 @@ function driveAlongPath(fromIdx) {
         if (simulatedDist >= totalDist) {
             const lastPt = path[path.length - 1];
             const prevPt = path.length >= 2 ? path[path.length - 2] : lastPt;
-            smoothAz = calcAzimuth(prevPt, lastPt);
-            setMapLocation([lastPt[0], lastPt[1]], undefined, smoothAz, 0);
+            currentAz = calcAzimuth(prevPt, lastPt);
+            setMapLocation([lastPt[0], lastPt[1]], undefined, currentAz, 0);
             APP._driveMarker.update({ coordinates: [lastPt[1], lastPt[0]] });
             stopDrive();
             if (fromIdx + 1 < APP.navPoints.length) showPreview(fromIdx + 1);
             return;
         }
 
-        if (time - lastCameraUpdate >= CAMERA_INTERVAL) {
-            lastCameraUpdate = time;
-            prevPos = { lat: nextPos.lat, lon: nextPos.lon };
-            const lookahead = Math.min(simulatedDist + (APP._driveSpeed / 3.6) * 0.5, totalDist);
-            const p = getPos(lookahead);
-            nextPos = { lat: p.lat, lon: p.lon };
-            const targetAz = calcAzimuth(path[p.seg], path[p.seg + 1]);
-            let diff = targetAz - smoothAz;
-            while (diff > 180) diff -= 360;
-            while (diff < -180) diff += 360;
-            smoothAz += diff * 0.5;
-            setMapLocation([nextPos.lat, nextPos.lon], undefined, ((smoothAz % 360) + 360) % 360, CAMERA_INTERVAL);
-        }
-
         const mp = getPos(simulatedDist);
+        if (mp.seg !== currentSeg) {
+            currentSeg = mp.seg;
+            const nextIdx = mp.seg + 1;
+            if (nextIdx < path.length) {
+                const d = (dists[nextIdx] - dists[mp.seg]) / (APP._driveSpeed / 3.6) * 1000;
+                currentAz = calcAzimuth(path[mp.seg], path[nextIdx]);
+                setMapLocation([path[nextIdx][0], path[nextIdx][1]], undefined, currentAz, Math.max(d, 500));
+            }
+        }
         APP._driveMarker.update({ coordinates: [mp.lon, mp.lat] });
         APP._driveRaf = requestAnimationFrame(frame);
     }
