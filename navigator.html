@@ -635,12 +635,12 @@ function isAudioPlaying() {
 }
 
 function onMotion(event) {
+    const gThreshold = APP.navConfig.SHOCK_THRESHOLD;
+    if (gThreshold <= 0) return;
     const { x, y, z } = event.accelerationIncludingGravity;
     const total = Math.sqrt(x*x + y*y + z*z);
     const impactG = Math.abs(total - 9.8) / 9.8;
     updateShockBar(impactG);
-    const gThreshold = APP.navConfig.SHOCK_THRESHOLD;
-    if (gThreshold <= 0) return;
     if (isAudioPlaying()) return;
     if (impactG > gThreshold) {
         const now = Date.now();
@@ -650,12 +650,15 @@ function onMotion(event) {
     }
 }
 
+let _shockFill = null;
+let _shockLabel = null;
+let _shockLastG = -1;
+let _shockLastColor = '';
+
 function updateShockBar(g) {
-    const fill = $('shockBarFill');
-    const bar = $('shockBar');
-    const label = $('shockBarValue');
-    if (!fill || !bar) return;
-    if (bar.style.display === 'none') return;
+    if (!_shockFill) _shockFill = $('shockBarFill');
+    if (!_shockLabel) _shockLabel = $('shockBarValue');
+    if (!_shockFill) return;
     const now = Date.now();
     if (g > APP._shockDisplayG) {
         APP._shockDisplayG = g;
@@ -666,16 +669,24 @@ function updateShockBar(g) {
             APP._shockDisplayG = g;
         }
     }
-    const clamped = Math.max(0.1, Math.min(3, APP._shockDisplayG));
+    const displayG = APP._shockDisplayG;
+    if (Math.abs(displayG - _shockLastG) < 0.05) return;
+    _shockLastG = displayG;
+    const clamped = Math.max(0.1, Math.min(3, displayG));
     const pct = ((clamped - 0.1) / (3 - 0.1)) * 100;
-    fill.style.width = Math.min(100, pct) + '%';
-    if (label) {
-        label.textContent = APP._shockDisplayG > 0.2 ? APP._shockDisplayG.toFixed(2) : '';
+    _shockFill.style.width = Math.min(100, pct) + '%';
+    if (_shockLabel) {
+        _shockLabel.textContent = displayG > 0.2 ? displayG.toFixed(2) : '';
     }
-    if (APP._shockDisplayG < 0.5) fill.style.background = '#30D158';
-    else if (APP._shockDisplayG < 1.5) fill.style.background = '#FFD700';
-    else if (APP._shockDisplayG < 2.5) fill.style.background = '#FF9500';
-    else fill.style.background = '#FF3B30';
+    let color;
+    if (displayG < 0.5) color = '#30D158';
+    else if (displayG < 1.5) color = '#FFD700';
+    else if (displayG < 2.5) color = '#FF9500';
+    else color = '#FF3B30';
+    if (color !== _shockLastColor) {
+        _shockFill.style.background = color;
+        _shockLastColor = color;
+    }
 }
 
 const SPEED_ALERT_DEBOUNCE = 5000;
