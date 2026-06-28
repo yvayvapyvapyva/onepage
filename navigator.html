@@ -512,21 +512,21 @@ function driveAlongPath(fromIdx) {
     }
 
     function startZoomWatcher() {
-        let stableCount = 0;
+        let stableStart = 0;
         let prevZoom = APP.map.zoom;
         function watch() {
             if (!APP._drivePaused || !APP._driveActive) return;
             const z = APP.map.zoom;
             if (z === prevZoom) {
-                stableCount++;
-                if (stableCount >= 5) {
+                if (!stableStart) stableStart = performance.now();
+                if ((performance.now() - stableStart) >= 100) {
                     const idx = APP._drivePauseData ? APP._drivePauseData.idx : (APP.navPreviewIndex >= 0 ? APP.navPreviewIndex : APP.navCurrentIndex);
                     APP._driveRaf = null;
                     if (idx !== undefined) driveAlongPath(idx);
                     return;
                 }
             } else {
-                stableCount = 0;
+                stableStart = 0;
                 prevZoom = z;
             }
             APP._zoomWatcherRaf = requestAnimationFrame(watch);
