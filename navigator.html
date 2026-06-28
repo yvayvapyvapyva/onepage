@@ -1312,14 +1312,17 @@ ymaps3.ready.then(async () => {
             }
             if (APP._simFirstRun) {
                 APP._simFirstRun = false;
-                const firstCoord = p.pts[0];
-                APP.map.update({ location: { center: [firstCoord[1], firstCoord[0]], zoom: 19 }, camera: { tilt: 60 }, duration: 400 });
+                APP._is3D = true;
+                APP.lastTilt = 60;
+                $('tiltBtn').textContent = '3D';
+                const from = p.pts[0], to = p.pts[1];
+                const dLon = (to[1] - from[1]) * Math.PI / 180;
+                const y = Math.sin(dLon) * Math.cos(to[0] * Math.PI / 180);
+                const x = Math.cos(from[0] * Math.PI / 180) * Math.sin(to[0] * Math.PI / 180) -
+                          Math.sin(from[0] * Math.PI / 180) * Math.cos(to[0] * Math.PI / 180) * Math.cos(dLon);
+                const bearing = (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+                setMapLocation(from, 19, bearing, 2000);
                 if (APP._isScheme) toggleMapType();
-                if (!APP._is3D) {
-                    APP._is3D = true;
-                    APP.lastTilt = 60;
-                    $('tiltBtn').textContent = '3D';
-                }
             }
             $('playBtn').classList.add('active');
             const startSim = () => {
