@@ -476,7 +476,39 @@ function driveAlongPath(fromIdx) {
             setMapLocation([lastPt[0], lastPt[1]], undefined, currentAz, 0);
             APP._driveMarker.update({ coordinates: [lastPt[1], lastPt[0]] });
             stopDrive();
-            if (fromIdx + 1 < APP.navPoints.length) showPreview(fromIdx + 1);
+            const nextIdx = fromIdx + 1;
+            if (nextIdx < APP.navPoints.length) {
+                const np = APP.navPoints[nextIdx];
+                if (np && np.pts && np.pts.length >= 2) {
+                    APP.navCurrentIndex = nextIdx;
+                    APP.navPreviewIndex = -1;
+                    APP._driveShowFrom = nextIdx;
+                    renderRoutePoints();
+                    const startSim = () => { if (!APP._driveActive) driveAlongPath(nextIdx); };
+                    const playNextAudio = () => {
+                        APP.navAudio.onended = null;
+                        if (np.comm && np.comm.trim() && !APP._commentMuted) {
+                            APP._commentAudio.onended = () => { APP._commentAudio.onended = null; startSim(); };
+                            playComment(np.comm);
+                        } else {
+                            startSim();
+                        }
+                    };
+                    const simTimeout = () => {
+                        if (!APP._driveActive) {
+                            const hasAudio = !APP.navAudio.paused && APP.navAudio.currentTime > 0;
+                            if (!hasAudio) {
+                                APP.navAudio.onended = null;
+                                startSim();
+                            }
+                        }
+                    };
+                    APP.navAudio.onended = playNextAudio;
+                    updateHud();
+                    playCommand(np.cmd);
+                    setTimeout(simTimeout, np.comm && np.comm.trim() ? 2000 : 1000);
+                }
+            }
             return;
         }
 
@@ -1392,7 +1424,19 @@ ymaps3.ready.then(async () => {
         $('speedValue').textContent = this.value;
     });
     $('playBtn').addEventListener('click', () => {
-        if (APP._driveActive) { stopDrive(); return; }
+        if (APP._driveActive) {
+            if (APP._drivePaused) {
+                const idx = APP._drivePauseData ? APP._drivePauseData.idx : (APP.navPreviewIndex >= 0 ? APP.navPreviewIndex : APP.navCurrentIndex);
+                $('playBtn').classList.add('active');
+                $('playBtn').innerHTML = '<svg viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>';
+                driveAlongPath(idx);
+            } else {
+                APP._drivePaused = true;
+                $('playBtn').classList.remove('active');
+                $('playBtn').innerHTML = '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>';
+            }
+            return;
+        }
         APP._drivePauseData = null;
         const idx = APP.navPreviewIndex >= 0 ? APP.navPreviewIndex : APP.navCurrentIndex;
         const p = APP.navPoints[idx];
@@ -1415,6 +1459,10 @@ ymaps3.ready.then(async () => {
             setMapLocation(from, 19, bearing, 2000);
             if (APP._isScheme) toggleMapType();
         }
+        APP.navCurrentIndex = idx;
+        APP.navPreviewIndex = -1;
+        APP._driveShowFrom = idx;
+        renderRoutePoints();
         $('playBtn').classList.add('active');
         $('playBtn').innerHTML = '<svg viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>';
         const startSim = () => {
