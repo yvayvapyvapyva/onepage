@@ -461,8 +461,6 @@ function driveAlongPath(fromIdx) {
     function frame(time) {
         if (!APP._driveActive) return;
         if (APP._drivePaused) {
-            const p = getPos(simulatedDist);
-            setMapLocation([p.lat, p.lon], undefined, currentAz, 0);
             APP._drivePauseData = { dist: simulatedDist, seg: currentSeg, az: currentAz, lastSeg: _lastSeg, idx: fromIdx };
             APP._driveRaf = null;
             return;
@@ -490,7 +488,6 @@ function driveAlongPath(fromIdx) {
                 _simZoom = curZoom;
             } else {
                 _simZoom = curZoom;
-                setMapLocation([mp.lat, mp.lon], undefined, currentAz, 0);
                 APP._drivePaused = true;
                 APP._drivePauseData = { dist: simulatedDist, seg: currentSeg, az: currentAz, lastSeg: _lastSeg, idx: fromIdx };
                 $('playBtn').classList.remove('active');
