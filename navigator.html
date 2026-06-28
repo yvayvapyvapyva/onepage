@@ -1359,8 +1359,6 @@ ymaps3.ready.then(async () => {
                     startSim();
                 }
             };
-            APP.navAudio.onended = playNext;
-            playCommand(p.cmd);
             const simTimeout = () => {
                 if (!APP._driveActive) {
                     const hasAudio = !APP.navAudio.paused && APP.navAudio.currentTime > 0;
@@ -1370,7 +1368,16 @@ ymaps3.ready.then(async () => {
                     }
                 }
             };
-            setTimeout(simTimeout, p.comm && p.comm.trim() ? 2000 : 1000);
+            const playAudio = () => {
+                APP.navAudio.onended = playNext;
+                playCommand(p.cmd);
+                setTimeout(simTimeout, p.comm && p.comm.trim() ? 2000 : 1000);
+            };
+            if (APP._simForceZoom) {
+                setTimeout(playAudio, 2000);
+            } else {
+                playAudio();
+            }
         }
     });
 
