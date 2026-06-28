@@ -419,7 +419,9 @@ function driveAlongPath(fromIdx) {
     APP.map.addChild(APP._driveMarker);
 
     const firstDur = (dists[1] - dists[0]) / (APP._driveSpeed / 3.6) * 1000;
-    setMapLocation([path[1][0], path[1][1]], 19, currentAz, Math.max(firstDur, 500));
+    const zoom = APP._simForceZoom ? 19 : undefined;
+    APP._simForceZoom = false;
+    setMapLocation([path[1][0], path[1][1]], zoom, currentAz, Math.max(firstDur, 500));
 
     function getPos(dist) {
         if (dist >= totalDist) {
@@ -1329,6 +1331,7 @@ ymaps3.ready.then(async () => {
                 showToast('У текущей точки нет пути для симуляции', 'info');
                 return;
             }
+            APP._simForceZoom = APP._simFirstRun;
             if (APP._simFirstRun) {
                 APP._simFirstRun = false;
                 APP._is3D = true;
