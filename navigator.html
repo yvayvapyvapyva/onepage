@@ -1075,6 +1075,7 @@ async function loadRouteFromJSON(data) {
 
 async function processRouteData(data) {
     startWakeLock();
+    APP._simFirstRun = true;
     if (!data || !Array.isArray(data)) throw new Error('Неверный формат данных: ожидается массив');
     if (data.length === 0) throw new Error('Маршрут пуст');
 
