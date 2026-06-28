@@ -383,6 +383,10 @@ function stopDrive() {
     if (APP._driveMarker) { APP.map.removeChild(APP._driveMarker); APP._driveMarker = null; }
     if (APP._prevAnim) { cancelAnimationFrame(APP._prevAnim); APP._prevAnim = null; }
     APP.navAudio.onended = null;
+    if (APP._savedBehaviors && APP.map) {
+        APP.map.setBehaviors(APP._savedBehaviors);
+        APP._savedBehaviors = null;
+    }
     const pb = $('playBtn');
     if (pb) pb.classList.remove('active');
 }
@@ -411,6 +415,11 @@ function driveAlongPath(fromIdx) {
     let currentAz = calcAzimuth(path[0], path[1]);
     let lastFrameTime = performance.now();
     let _lastSeg = 0;
+
+    if (APP.map) {
+        APP._savedBehaviors = ['drag', 'scrollZoom', 'dblClick', 'pinchZoom', 'pinchRotate', 'pinchTilt', 'mouseTilt', 'mouseRotate'];
+        APP.map.setBehaviors(['drag', 'pinchRotate', 'pinchTilt', 'mouseTilt', 'mouseRotate']);
+    }
 
     const markerEl = document.createElement('div');
     markerEl.innerHTML = '<svg width="18" height="18" viewBox="0 0 18 18"><circle cx="9" cy="9" r="7" fill="#FF3B30" stroke="#fff" stroke-width="2.5"/></svg>';
