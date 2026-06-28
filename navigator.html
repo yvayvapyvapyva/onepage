@@ -230,7 +230,9 @@ const APP = {
     _motionTracked: false,
     _shockDisplayG: 0,
     _shockPeakTime: 0,
-    _simFirstRun: true
+    _simFirstRun: true,
+    _drivePaused: false,
+    _drivePauseData: null
 };
 
 const $ = id => document.getElementById(id);
@@ -377,18 +379,19 @@ function setMapLocation(center, zoom, azimuth, duration = 400) {
 
 function stopDrive() {
     APP._driveActive = false;
+    APP._drivePaused = false;
     APP._driveShowFrom = -1;
     $('speedSliderWrap').style.display = 'none';
     if (APP._driveRaf) { cancelAnimationFrame(APP._driveRaf); APP._driveRaf = null; }
+    if (APP._zoomWatcherRaf) { cancelAnimationFrame(APP._zoomWatcherRaf); APP._zoomWatcherRaf = null; }
     if (APP._driveMarker) { APP.map.removeChild(APP._driveMarker); APP._driveMarker = null; }
     if (APP._prevAnim) { cancelAnimationFrame(APP._prevAnim); APP._prevAnim = null; }
     APP.navAudio.onended = null;
-    if (APP._savedBehaviors && APP.map) {
-        APP.map.setBehaviors(APP._savedBehaviors);
-        APP._savedBehaviors = null;
-    }
     const pb = $('playBtn');
-    if (pb) pb.classList.remove('active');
+    if (pb) {
+        pb.classList.remove('active');
+        pb.innerHTML = '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>';
+    }
 }
 
 function driveAlongPath(fromIdx) {
@@ -410,16 +413,16 @@ function driveAlongPath(fromIdx) {
     APP._driveActive = true;
     $('speedSliderWrap').style.display = 'flex';
     $('speedValue').textContent = APP._driveSpeed;
-    let simulatedDist = 0;
-    let currentSeg = 0;
-    let currentAz = calcAzimuth(path[0], path[1]);
+    const resume = APP._drivePauseData;
+    APP._drivePauseData = null;
+    APP._drivePaused = false;
+    let simulatedDist = resume ? resume.dist : 0;
+    let currentSeg = resume ? resume.seg : 0;
+    let currentAz = resume ? resume.az : calcAzimuth(path[0], path[1]);
     let lastFrameTime = performance.now();
-    let _lastSeg = 0;
-
-    if (APP.map) {
-        APP._savedBehaviors = ['drag', 'scrollZoom', 'dblClick', 'pinchZoom', 'pinchRotate', 'pinchTilt', 'mouseTilt', 'mouseRotate'];
-        APP.map.setBehaviors(['drag', 'pinchRotate', 'pinchTilt', 'mouseTilt', 'mouseRotate']);
-    }
+    let _lastSeg = resume ? resume.lastSeg : 0;
+    let _simZoom;
+    try { _simZoom = APP.map.zoom; } catch (e) { _simZoom = undefined; }
 
     const markerEl = document.createElement('div');
     markerEl.innerHTML = '<svg width="18" height="18" viewBox="0 0 18 18"><circle cx="9" cy="9" r="7" fill="#FF3B30" stroke="#fff" stroke-width="2.5"/></svg>';
@@ -427,10 +430,19 @@ function driveAlongPath(fromIdx) {
     APP._driveMarker = new ymaps3.YMapMarker({ coordinates: [path[0][1], path[0][0]] }, markerEl);
     APP.map.addChild(APP._driveMarker);
 
-    const firstDur = (dists[1] - dists[0]) / (APP._driveSpeed / 3.6) * 1000;
-    const zoom = APP._simForceZoom ? 19 : undefined;
-    APP._simForceZoom = false;
-    setMapLocation([path[1][0], path[1][1]], zoom, currentAz, Math.max(firstDur, 500));
+    if (resume) {
+        const mp = getPos(simulatedDist);
+        APP._driveMarker.update({ coordinates: [mp.lon, mp.lat] });
+        const nextIdx = resume.seg + 1;
+        if (nextIdx < path.length) {
+            setMapLocation([path[nextIdx][0], path[nextIdx][1]], undefined, currentAz, 0);
+        }
+    } else {
+        const firstDur = (dists[1] - dists[0]) / (APP._driveSpeed / 3.6) * 1000;
+        const zoom = APP._simForceZoom ? 19 : undefined;
+        APP._simForceZoom = false;
+        setMapLocation([path[1][0], path[1][1]], zoom, currentAz, Math.max(firstDur, 500));
+    }
 
     function getPos(dist) {
         if (dist >= totalDist) {
@@ -448,6 +460,11 @@ function driveAlongPath(fromIdx) {
 
     function frame(time) {
         if (!APP._driveActive) return;
+        if (APP._drivePaused) {
+            APP._drivePauseData = { dist: simulatedDist, seg: currentSeg, az: currentAz, lastSeg: _lastSeg, idx: fromIdx };
+            APP._driveRaf = null;
+            return;
+        }
         const dt = (time - lastFrameTime) / 1000;
         lastFrameTime = time;
         simulatedDist += (APP._driveSpeed / 3.6) * dt;
@@ -464,6 +481,23 @@ function driveAlongPath(fromIdx) {
         }
 
         const mp = getPos(simulatedDist);
+
+        const curZoom = APP.map.zoom;
+        if (curZoom !== _simZoom) {
+            if (_simZoom === undefined) {
+                _simZoom = curZoom;
+            } else {
+                _simZoom = curZoom;
+                APP._drivePaused = true;
+                APP._drivePauseData = { dist: simulatedDist, seg: currentSeg, az: currentAz, lastSeg: _lastSeg, idx: fromIdx };
+                $('playBtn').classList.remove('active');
+                $('playBtn').innerHTML = '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>';
+                APP._driveRaf = null;
+                startZoomWatcher();
+                return;
+            }
+        }
+
         if (mp.seg !== currentSeg) {
             currentSeg = mp.seg;
             const nextIdx = mp.seg + 1;
@@ -476,7 +510,33 @@ function driveAlongPath(fromIdx) {
         APP._driveMarker.update({ coordinates: [mp.lon, mp.lat] });
         APP._driveRaf = requestAnimationFrame(frame);
     }
+
+    function startZoomWatcher() {
+        let stableCount = 0;
+        let prevZoom = APP.map.zoom;
+        function watch() {
+            if (!APP._drivePaused || !APP._driveActive) return;
+            const z = APP.map.zoom;
+            if (z === prevZoom) {
+                stableCount++;
+                if (stableCount >= 5) {
+                    const idx = APP._drivePauseData ? APP._drivePauseData.idx : (APP.navPreviewIndex >= 0 ? APP.navPreviewIndex : APP.navCurrentIndex);
+                    APP._driveRaf = null;
+                    if (idx !== undefined) driveAlongPath(idx);
+                    return;
+                }
+            } else {
+                stableCount = 0;
+                prevZoom = z;
+            }
+            APP._zoomWatcherRaf = requestAnimationFrame(watch);
+        }
+        watch();
+    }
+
     APP._driveRaf = requestAnimationFrame(frame);
+    $('playBtn').classList.add('active');
+    $('playBtn').innerHTML = '<svg viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>';
 }
 
 
@@ -1333,8 +1393,18 @@ ymaps3.ready.then(async () => {
     });
     $('playBtn').addEventListener('click', () => {
         if (APP._driveActive) {
-            stopDrive();
+            if (APP._drivePaused) {
+                const idx = APP._drivePauseData ? APP._drivePauseData.idx : (APP.navPreviewIndex >= 0 ? APP.navPreviewIndex : APP.navCurrentIndex);
+                $('playBtn').classList.add('active');
+                $('playBtn').innerHTML = '<svg viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>';
+                driveAlongPath(idx);
+            } else {
+                APP._drivePaused = true;
+                $('playBtn').classList.remove('active');
+                $('playBtn').innerHTML = '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>';
+            }
         } else {
+            APP._drivePauseData = null;
             const idx = APP.navPreviewIndex >= 0 ? APP.navPreviewIndex : APP.navCurrentIndex;
             const p = APP.navPoints[idx];
             if (!p || !p.pts || p.pts.length < 2) {
@@ -1357,6 +1427,7 @@ ymaps3.ready.then(async () => {
                 if (APP._isScheme) toggleMapType();
             }
             $('playBtn').classList.add('active');
+            $('playBtn').innerHTML = '<svg viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>';
             const startSim = () => {
                 if (!APP._driveActive) driveAlongPath(idx);
             };
