@@ -1392,73 +1392,61 @@ ymaps3.ready.then(async () => {
         $('speedValue').textContent = this.value;
     });
     $('playBtn').addEventListener('click', () => {
-        if (APP._driveActive) {
-            if (APP._drivePaused) {
-                const idx = APP._drivePauseData ? APP._drivePauseData.idx : (APP.navPreviewIndex >= 0 ? APP.navPreviewIndex : APP.navCurrentIndex);
-                $('playBtn').classList.add('active');
-                $('playBtn').innerHTML = '<svg viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>';
-                driveAlongPath(idx);
+        if (APP._driveActive) { stopDrive(); return; }
+        APP._drivePauseData = null;
+        const idx = APP.navPreviewIndex >= 0 ? APP.navPreviewIndex : APP.navCurrentIndex;
+        const p = APP.navPoints[idx];
+        if (!p || !p.pts || p.pts.length < 2) {
+            showToast('У текущей точки нет пути для симуляции', 'info');
+            return;
+        }
+        APP._simForceZoom = APP._simFirstRun;
+        if (APP._simFirstRun) {
+            APP._simFirstRun = false;
+            APP._is3D = true;
+            APP.lastTilt = 60;
+            $('tiltBtn').textContent = '3D';
+            const from = p.pts[0], to = p.pts[1];
+            const dLon = (to[1] - from[1]) * Math.PI / 180;
+            const y = Math.sin(dLon) * Math.cos(to[0] * Math.PI / 180);
+            const x = Math.cos(from[0] * Math.PI / 180) * Math.sin(to[0] * Math.PI / 180) -
+                      Math.sin(from[0] * Math.PI / 180) * Math.cos(to[0] * Math.PI / 180) * Math.cos(dLon);
+            const bearing = (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+            setMapLocation(from, 19, bearing, 2000);
+            if (APP._isScheme) toggleMapType();
+        }
+        $('playBtn').classList.add('active');
+        $('playBtn').innerHTML = '<svg viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>';
+        const startSim = () => {
+            if (!APP._driveActive) driveAlongPath(idx);
+        };
+        const playNext = () => {
+            APP.navAudio.onended = null;
+            if (p.comm && p.comm.trim() && !APP._commentMuted) {
+                APP._commentAudio.onended = () => { APP._commentAudio.onended = null; startSim(); };
+                playComment(p.comm);
             } else {
-                APP._drivePaused = true;
-                $('playBtn').classList.remove('active');
-                $('playBtn').innerHTML = '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>';
+                startSim();
             }
-        } else {
-            APP._drivePauseData = null;
-            const idx = APP.navPreviewIndex >= 0 ? APP.navPreviewIndex : APP.navCurrentIndex;
-            const p = APP.navPoints[idx];
-            if (!p || !p.pts || p.pts.length < 2) {
-                showToast('У текущей точки нет пути для симуляции', 'info');
-                return;
-            }
-            APP._simForceZoom = APP._simFirstRun;
-            if (APP._simFirstRun) {
-                APP._simFirstRun = false;
-                APP._is3D = true;
-                APP.lastTilt = 60;
-                $('tiltBtn').textContent = '3D';
-                const from = p.pts[0], to = p.pts[1];
-                const dLon = (to[1] - from[1]) * Math.PI / 180;
-                const y = Math.sin(dLon) * Math.cos(to[0] * Math.PI / 180);
-                const x = Math.cos(from[0] * Math.PI / 180) * Math.sin(to[0] * Math.PI / 180) -
-                          Math.sin(from[0] * Math.PI / 180) * Math.cos(to[0] * Math.PI / 180) * Math.cos(dLon);
-                const bearing = (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
-                setMapLocation(from, 19, bearing, 2000);
-                if (APP._isScheme) toggleMapType();
-            }
-            $('playBtn').classList.add('active');
-            $('playBtn').innerHTML = '<svg viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>';
-            const startSim = () => {
-                if (!APP._driveActive) driveAlongPath(idx);
-            };
-            const playNext = () => {
-                APP.navAudio.onended = null;
-                if (p.comm && p.comm.trim() && !APP._commentMuted) {
-                    APP._commentAudio.onended = () => { APP._commentAudio.onended = null; startSim(); };
-                    playComment(p.comm);
-                } else {
+        };
+        const simTimeout = () => {
+            if (!APP._driveActive) {
+                const hasAudio = !APP.navAudio.paused && APP.navAudio.currentTime > 0;
+                if (!hasAudio) {
+                    APP.navAudio.onended = null;
                     startSim();
                 }
-            };
-            const simTimeout = () => {
-                if (!APP._driveActive) {
-                    const hasAudio = !APP.navAudio.paused && APP.navAudio.currentTime > 0;
-                    if (!hasAudio) {
-                        APP.navAudio.onended = null;
-                        startSim();
-                    }
-                }
-            };
-            const playAudio = () => {
-                APP.navAudio.onended = playNext;
-                playCommand(p.cmd);
-                setTimeout(simTimeout, p.comm && p.comm.trim() ? 2000 : 1000);
-            };
-            if (APP._simForceZoom) {
-                setTimeout(playAudio, 2000);
-            } else {
-                playAudio();
             }
+        };
+        const playAudio = () => {
+            APP.navAudio.onended = playNext;
+            playCommand(p.cmd);
+            setTimeout(simTimeout, p.comm && p.comm.trim() ? 2000 : 1000);
+        };
+        if (APP._simForceZoom) {
+            setTimeout(playAudio, 2000);
+        } else {
+            playAudio();
         }
     });
 
