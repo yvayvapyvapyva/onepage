@@ -233,7 +233,8 @@ const APP = {
     _simFirstRun: true,
     _drivePaused: false,
     _drivePauseData: null,
-    _navSeq: 0
+    _navSeq: 0,
+    _audioPending: 0
 };
 
 const $ = id => document.getElementById(id);
@@ -735,7 +736,8 @@ function updateShockBarVisibility() {
 const SHOCK_DEBOUNCE = 3000;
 
 function isAudioPlaying() {
-    return (!APP.navAudio.paused && APP.navAudio.currentTime > 0) ||
+    return APP._audioPending > 0 ||
+           (!APP.navAudio.paused && APP.navAudio.currentTime > 0) ||
            (!APP._commentAudio.paused && APP._commentAudio.currentTime > 0);
 }
 
@@ -1095,33 +1097,38 @@ async function playCommand(text) {
 }
 
 async function playTTS(text, voice_type = 'command') {
-    APP.navAudio.pause();
-    const cached = APP._audioCache.get(text);
-    if (cached) {
-        APP.navAudio.src = cached;
-        await APP.navAudio.play().catch(() => {});
-        return;
-    }
+    APP._audioPending++;
     try {
-        const resp = await fetch(TTS_API_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ batches: [{ voice_type, texts: [text] }] })
-        });
-        const data = await resp.json();
-        if (data.audios && data.audios[text]) {
-            const binaryStr = atob(data.audios[text]);
-            const bytes = new Uint8Array(binaryStr.length);
-            for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
-            const blob = new Blob([bytes], { type: 'audio/mp3' });
-            const url = URL.createObjectURL(blob);
-            APP._audioCache.set(text, url);
-            updateHud();
-            APP.navAudio.src = url;
+        APP.navAudio.pause();
+        const cached = APP._audioCache.get(text);
+        if (cached) {
+            APP.navAudio.src = cached;
             await APP.navAudio.play().catch(() => {});
+            return;
         }
-    } catch (e) {
-        console.warn('TTS error:', e);
+        try {
+            const resp = await fetch(TTS_API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ batches: [{ voice_type, texts: [text] }] })
+            });
+            const data = await resp.json();
+            if (data.audios && data.audios[text]) {
+                const binaryStr = atob(data.audios[text]);
+                const bytes = new Uint8Array(binaryStr.length);
+                for (let i = 0; i < binaryStr.length; i++) bytes[i] = binaryStr.charCodeAt(i);
+                const blob = new Blob([bytes], { type: 'audio/mp3' });
+                const url = URL.createObjectURL(blob);
+                APP._audioCache.set(text, url);
+                updateHud();
+                APP.navAudio.src = url;
+                await APP.navAudio.play().catch(() => {});
+            }
+        } catch (e) {
+            console.warn('TTS error:', e);
+        }
+    } finally {
+        APP._audioPending--;
     }
 }
 
