@@ -232,7 +232,8 @@ const APP = {
     _shockPeakTime: 0,
     _simFirstRun: true,
     _drivePaused: false,
-    _drivePauseData: null
+    _drivePauseData: null,
+    _navSeq: 0
 };
 
 const $ = id => document.getElementById(id);
@@ -503,9 +504,10 @@ function driveAlongPath(fromIdx) {
                             }
                         }
                     };
-                    APP.navAudio.onended = playNextAudio;
                     updateHud();
-                    playCommand(np.cmd);
+                    playCommand(np.cmd).then(() => {
+                        APP.navAudio.onended = playNextAudio;
+                    });
                     setTimeout(simTimeout, np.comm && np.comm.trim() ? 2000 : 1000);
                 }
             }
@@ -991,13 +993,14 @@ function updateHud() {
     $('hudCmdTextInner').textContent = t.cmd;
     $('hudCmdTextInner').style.opacity = APP._audioCache.has(t.cmd) ? '1' : '0.35';
     $('hudCmd').onclick = () => {
-        playCommand(t.cmd);
-        if (t.comm && t.comm.trim()) {
-            APP.navAudio.onended = () => {
-                APP.navAudio.onended = null;
-                playComment(t.comm);
-            };
-        }
+        playCommand(t.cmd).then(() => {
+            if (t.comm && t.comm.trim()) {
+                APP.navAudio.onended = () => {
+                    APP.navAudio.onended = null;
+                    playComment(t.comm);
+                };
+            }
+        });
     };
     $('selectBtn').style.display = isPreview ? 'block' : 'none';
     if (isPreview) $('selectBtn').onclick = () => setTarget(idx);
@@ -1086,6 +1089,7 @@ function closePreview() {
 async function playCommand(text) {
     if (!text || !text.trim()) return;
     APP._commentAudio.pause();
+    APP.navAudio.onended = null;
     APP.navAudio.pause();
     await playTTS(text);
 }
@@ -1128,8 +1132,11 @@ async function playComment(text) {
     APP._commentAudio.pause();
     const saved = APP.navAudio;
     APP.navAudio = APP._commentAudio;
-    await playTTS(text, 'comment');
-    APP.navAudio = saved;
+    try {
+        await playTTS(text, 'comment');
+    } finally {
+        APP.navAudio = saved;
+    }
 }
 
 
@@ -1142,13 +1149,17 @@ function navCheckTriggers() {
     updateHudDist(d, ad);
 
     if (d <= APP.navConfig.TRIGGER_DIST && ad <= APP.navConfig.AZ_TOLERANCE) {
-        playCommand(t.cmd);
-        if (t.comm && t.comm.trim()) {
-            APP.navAudio.onended = () => {
-                APP.navAudio.onended = null;
-                playComment(t.comm);
-            };
-        }
+        const mySeq = ++APP._navSeq;
+        playCommand(t.cmd).then(() => {
+            if (mySeq !== APP._navSeq) return;
+            if (t.comm && t.comm.trim()) {
+                APP.navAudio.onended = () => {
+                    APP.navAudio.onended = null;
+                    if (mySeq !== APP._navSeq) return;
+                    playComment(t.comm);
+                };
+            }
+        });
         APP.navCurrentIndex++;
         APP.navPreviewIndex = -1;
         if (APP.navCurrentIndex < APP.navPoints.length) {
@@ -1487,8 +1498,9 @@ ymaps3.ready.then(async () => {
             }
         };
         const playAudio = () => {
-            APP.navAudio.onended = playNext;
-            playCommand(p.cmd);
+            playCommand(p.cmd).then(() => {
+                APP.navAudio.onended = playNext;
+            });
             setTimeout(simTimeout, p.comm && p.comm.trim() ? 2000 : 1000);
         };
         if (APP._simForceZoom) {
