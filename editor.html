@@ -232,6 +232,20 @@ function updateDrawVertexMarkers(pts, colorHex) {
             }
         }, wrap);
         (function(idx) {
+            function clearSelection() {
+                _drawVertexMarkers.forEach(m => {
+                    const wrap = m.element;
+                    if (!wrap) return;
+                    const d = wrap.lastElementChild;
+                    if (d) d.style.display = 'none';
+                    const dt = wrap.firstElementChild;
+                    if (dt) {
+                        dt.style.borderColor = '#000';
+                        const ie = dt.children[1];
+                        if (ie) ie.style.borderWidth = '1px';
+                    }
+                });
+            }
             function removeVertex() {
                 if (pts.length <= 2) return;
                 _drawPathPoints.splice(idx, 1);
@@ -239,18 +253,14 @@ function updateDrawVertexMarkers(pts, colorHex) {
                 updateDrawVertexMarkers(_drawPathPoints, col);
                 if (_drawPathPoints.length < 2) $('addText').textContent = "Рисуйте путь...";
             }
+            dot.addEventListener('pointerdown', clearSelection);
             dot.addEventListener('click', (e) => {
                 e.stopPropagation();
-                _drawVertexMarkers.forEach(m => {
-                    const wrap = m.element;
-                    if (!wrap) return;
-                    const d = wrap.lastElementChild;
-                    if (d) d.style.display = 'none';
-                    const dt = wrap.firstElementChild;
-                    if (dt) dt.style.borderColor = '#000';
-                });
+                clearSelection();
                 del.style.display = 'block';
                 dot.style.borderColor = '#ff3b30';
+                const innerEl = dot.children[1];
+                if (innerEl) innerEl.style.borderWidth = '3px';
             });
             del.addEventListener('click', (e) => { e.stopPropagation(); removeVertex(); });
         })(i);
