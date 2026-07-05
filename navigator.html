@@ -410,7 +410,6 @@ function driveAlongPath(fromIdx) {
     if (totalDist < 0.1) return;
 
     APP._driveShowFrom = fromIdx;
-    renderRoutePoints();
 
     APP._driveActive = true;
     $('speedSliderWrap').style.display = 'flex';
