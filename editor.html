@@ -1254,7 +1254,7 @@ function addP(coords, data = null, silent = false) {
             line: null
         };
         
-        el.addEventListener('click', () => { setActivePoint(p, true); if(!isAdd && !isDrawing) openEditPointModal(p); });
+        el.addEventListener('click', () => { if(!isDrawing) { setActivePoint(p, true); if(!isAdd) openEditPointModal(p); } });
         
         if (ptsData.length >= 2) {
             const lineCoords = swapCoords(ptsData);
