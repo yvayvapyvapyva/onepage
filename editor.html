@@ -559,7 +559,7 @@ ymaps3.ready.then(async () => {
     }, true);
     map.addChild(new YMapListener({
         onFastClick: (object, event) => {
-            if (object?.type === 'marker') return;
+            if (object?.type === 'marker' && !isDrawing) return;
             if (!event || !event.coordinates) return;
             const lonLat = event.coordinates;
             const latLon = [f6(lonLat[1]), f6(lonLat[0])];
