@@ -955,8 +955,8 @@ function renderRoutePoints() {
             const coords = swapPts(p.pts);
             const YMapFeature = ymaps3.YMapFeature;
             const strokes = [];
-            strokes.push({ width: isPrevious ? 8 : 4, color: isCurrent ? p.hex : (isPrevious ? hexToRgba(p.hex, 0.7) : p.hex) });
-            strokes.push({ width: isCurrent ? 6 : (isPrevious ? 10 : 6), color: isPrevious ? 'rgba(0,0,0,0.7)' : '#000000' });
+            strokes.push({ width: isPrevious ? 6 : 4, color: isCurrent ? p.hex : (isPrevious ? hexToRgba(p.hex, 0.5) : p.hex) });
+            strokes.push({ width: isCurrent ? 6 : (isPrevious ? 8 : 6), color: isPrevious ? 'rgba(0,0,0,0.7)' : '#000000' });
             if (isCurrent) strokes.push({ width: 10, color: '#00FF00' });
             line = new YMapFeature({
                 geometry: { type: 'LineString', coordinates: coords },
