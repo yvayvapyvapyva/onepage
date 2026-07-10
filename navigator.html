@@ -937,7 +937,7 @@ function renderRoutePoints() {
 
         const el = document.createElement('div');
         el.style.cssText = `width:40px;height:40px;cursor:pointer;transform:translate(-50%,-50%);`;
-        if (isPrevious) el.style.opacity = '0.5';
+        if (isPrevious) el.style.opacity = '0.7';
         el.innerHTML = `<img src="${getNavIconSvg(p.hex, p.id, p.az, false, isCurrent, hasComm)}" width="40" height="40" class="marker-img" />`;
         el.dataset.idx = i;
         const placemark = new ymaps3.YMapMarker({ coordinates: [p.lon, p.lat] }, el);
@@ -955,9 +955,9 @@ function renderRoutePoints() {
             const coords = swapPts(p.pts);
             const YMapFeature = ymaps3.YMapFeature;
             const strokes = [];
-            strokes.push({ width: 4, color: isCurrent ? p.hex : (isPrevious ? hexToRgba(p.hex, 0.5) : p.hex) });
-            if (isCurrent) strokes.push({ width: 6, color: '#A4E84A' });
-            strokes.push({ width: isCurrent ? 8 : 6, color: isPrevious ? 'rgba(0,0,0,0.5)' : '#000000' });
+            strokes.push({ width: isPrevious ? 8 : 4, color: isCurrent ? p.hex : (isPrevious ? hexToRgba(p.hex, 0.7) : p.hex) });
+            strokes.push({ width: isCurrent ? 6 : (isPrevious ? 10 : 6), color: isPrevious ? 'rgba(0,0,0,0.7)' : '#000000' });
+            if (isCurrent) strokes.push({ width: 10, color: '#00FF00' });
             line = new YMapFeature({
                 geometry: { type: 'LineString', coordinates: coords },
                 style: { stroke: strokes }
