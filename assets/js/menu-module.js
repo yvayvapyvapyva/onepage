@@ -6,6 +6,7 @@ const MenuModule = {
     routesDescriptions: {}, // { "id-m": { name, description, id, m } }
     _isFetchingRoutes: false,
     _categoryTree: null,
+    _starredTree: null,
     _expandedFolders: new Set(),
     _userRoutes: null,
     _userId: null,
@@ -237,6 +238,7 @@ const MenuModule = {
 
         this.routesDescriptions = routesFlat;
         this._categoryTree = this._buildCategoryTree();
+        this._starredTree = this._buildStarredTree();
         
         return;
     },
@@ -299,6 +301,8 @@ const MenuModule = {
         const root = { folders: {}, routes: [] };
         const groups = {};
         for (const [key, route] of Object.entries(this.routesDescriptions)) {
+            const rawName = route.name || '';
+            if (rawName.startsWith('*')) continue;
             const cid = route.id;
             if (!groups[cid]) {
                 groups[cid] = { name: route.creator_name || cid, routes: [] };
@@ -318,15 +322,23 @@ const MenuModule = {
                 }
                 n.routes.push({ ...route, name: leafName, fullPath });
             }
+            if (node.routes.length > 0) {
+                node.folders['Без категории'] = node.folders['Без категории'] || { folders: {}, routes: [] };
+                node.folders['Без категории'].routes.push(...node.routes);
+                node.routes = [];
+            }
             root.folders[group.name] = node;
         }
         return root;
     },
 
-    _buildMergedTree() {
+    _buildStarredTree() {
         const root = { folders: {}, routes: [] };
         for (const [key, route] of Object.entries(this.routesDescriptions)) {
-            const fullPath = route.name || key;
+            const rawName = route.name || '';
+            if (!rawName.startsWith('*')) continue;
+            const cleanName = rawName.substring(1);
+            const fullPath = cleanName || key;
             const parts = fullPath.split('/').map(s => s.trim()).filter(Boolean);
             const leafName = parts.pop() || fullPath;
             let node = root;
@@ -336,6 +348,11 @@ const MenuModule = {
             }
             node.routes.push({ ...route, name: leafName, fullPath, key });
         }
+        if (root.routes.length > 0) {
+            root.folders['Без категории'] = root.folders['Без категории'] || { folders: {}, routes: [] };
+            root.folders['Без категории'].routes.push(...root.routes);
+            root.routes = [];
+        }
         return root;
     },
 
@@ -343,20 +360,25 @@ const MenuModule = {
         if (!this.currentRoute) return;
         const route = this.routesDescriptions[this.currentRoute];
         if (!route || !route.name) return;
-        const creatorName = route.creator_name || route.id;
-        this._expandedFolders.add(creatorName);
-        const parts = route.name.split('/').filter(Boolean);
-        parts.pop();
-        let path = creatorName;
-        for (const part of parts) {
-            path = path + '/' + part;
-            this._expandedFolders.add(path);
-        }
-        if (!ROOT_CREATOR_FOLDER_VISIBLE) {
-            let barePath = '';
-            for (const part of route.name.split('/').filter(Boolean).slice(0, -1)) {
-                barePath = barePath ? barePath + '/' + part : part;
-                this._expandedFolders.add(barePath);
+        const rawName = route.name;
+        if (rawName.startsWith('*')) {
+            const cleanName = rawName.substring(1);
+            const parts = cleanName.split('/').filter(Boolean);
+            parts.pop();
+            let path = '';
+            for (const part of parts) {
+                path = path ? path + '/' + part : part;
+                this._expandedFolders.add(path);
+            }
+        } else {
+            const creatorName = route.creator_name || route.id;
+            this._expandedFolders.add(creatorName);
+            const parts = rawName.split('/').filter(Boolean);
+            parts.pop();
+            let path = creatorName;
+            for (const part of parts) {
+                path = path + '/' + part;
+                this._expandedFolders.add(path);
             }
         }
     },
@@ -435,27 +457,28 @@ const MenuModule = {
 
         const frag = document.createDocumentFragment();
 
-        if (this._categoryTree) {
-            if (!ROOT_CREATOR_FOLDER_VISIBLE || this._filterCreator) {
-                if (!ROOT_CREATOR_FOLDER_VISIBLE && !this._filterCreator) {
-                    const merged = this._buildMergedTree();
-                    this._renderTreeNode(merged, frag, '', false);
-                } else {
-                    const folders = Object.values(this._categoryTree.folders);
-                    if (folders.length === 1) {
-                        this._renderTreeNode(folders[0], frag, '', false);
-                    } else {
-                        for (const node of folders) {
-                            this._renderTreeNode(node, frag, '', false);
-                        }
-                    }
-                }
-            } else {
-                this._renderTreeNode(this._categoryTree, frag, '', true);
-            }
+        // 1. Звёздочки (*) — без папки создателя, в самом верху
+        const starredTree = this._starredTree;
+        const hasStarred = starredTree && (Object.keys(starredTree.folders).length > 0 || starredTree.routes.length > 0);
+        const hasRegular = this._categoryTree && Object.keys(this._categoryTree.folders).length > 0;
+        const hasPersonal = this._userRoutes && this._userRoutes.length > 0;
+
+        if (hasStarred) {
+            this._renderTreeNode(starredTree, frag, '', false);
         }
 
-        if (this._userRoutes && this._userRoutes.length > 0) {
+        // 2. Папки создателей (без *)
+        if (hasRegular) {
+            if (hasStarred) {
+                const sep = document.createElement('div');
+                sep.style.cssText = 'height:1px;background:rgba(255,255,255,0.1);margin:8px 0;flex-shrink:0;';
+                frag.appendChild(sep);
+            }
+            this._renderTreeNode(this._categoryTree, frag, '', true);
+        }
+
+        // 3. Личные маршруты
+        if (hasPersonal) {
             const sep = document.createElement('div');
             sep.style.cssText = 'height:1px;background:rgba(255,255,255,0.1);margin:8px 0;flex-shrink:0;';
             frag.appendChild(sep);
@@ -504,6 +527,7 @@ const MenuModule = {
         const folderNames = Object.keys(node.folders).sort((a, b) => a.localeCompare(b));
 
         for (const name of folderNames) {
+            if (name === 'Без категории') continue;
             const folderPath = path ? path + '/' + name : name;
             const sub = node.folders[name];
             const total = this._countTreeRoutes(sub);
@@ -533,6 +557,36 @@ const MenuModule = {
                 const childWrap = document.createElement('div');
                 childWrap.style.cssText = 'padding-left:16px;display:flex;flex-direction:column;gap:6px;';
                 this._renderTreeNode(sub, childWrap, folderPath, false);
+                container.appendChild(childWrap);
+            }
+        }
+
+        const uncat = node.folders['Без категории'];
+        if (uncat) {
+            const fcPath = path ? path + '/' + 'Без категории' : 'Без категории';
+            const fcExpanded = this._expandedFolders.has(fcPath);
+            const fcTotal = this._countTreeRoutes(uncat);
+            const fcEl = document.createElement('div');
+            fcEl.className = 'category-folder';
+            const fcHdr = document.createElement('div');
+            fcHdr.className = 'category-header' + (fcExpanded ? ' expanded' : '') + (isRoot ? ' root' : '');
+            fcHdr.innerHTML = `
+                <span class="category-icon">${fcExpanded ? '📂' : '📁'}</span>
+                <span class="category-name">Без категории</span>
+                <span class="category-count">${fcTotal}</span>
+            `;
+            fcHdr.addEventListener('click', e => {
+                e.stopPropagation();
+                if (this._expandedFolders.has(fcPath)) this._expandedFolders.delete(fcPath);
+                else this._expandedFolders.add(fcPath);
+                this._buildRoutesList();
+            });
+            fcEl.appendChild(fcHdr);
+            container.appendChild(fcEl);
+            if (fcExpanded) {
+                const childWrap = document.createElement('div');
+                childWrap.style.cssText = 'padding-left:16px;display:flex;flex-direction:column;gap:6px;';
+                this._renderTreeNode(uncat, childWrap, fcPath, false);
                 container.appendChild(childWrap);
             }
         }
