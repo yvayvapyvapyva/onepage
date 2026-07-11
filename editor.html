@@ -76,6 +76,7 @@
     </div>
 </div>
 
+<div id="loadingSpinner"><div class="spinner-box"><div class="spinner-ring"></div><div class="spinner-text">Загрузка...</div></div></div>
 <div id="znakiModal" class="instruction-overlay" onclick="if(event.target===this) closeZnakiSelector()">
     <div class="instruction-sheet" style="max-width:450px">
         <div class="instruction-header">
@@ -1049,8 +1050,10 @@ let currentRouteMeta = { name: '', description: '', visible: false };
 
 const openRouteSettings = async (routeName) => {
     settingsRouteName = routeName;
+    $('loadingSpinner').classList.add('active');
     try {
         const meta = await callYcFunction('get_meta', { m: routeName });
+        $('loadingSpinner').classList.remove('active');
         currentRouteMeta = {
             name: meta.name || routeName,
             description: meta.description || '',
@@ -1063,7 +1066,7 @@ const openRouteSettings = async (routeName) => {
         $('routeDescription').value = currentRouteMeta.description;
         $('routeVisible').checked = currentRouteMeta.visible;
     } catch (e) {
-        
+        $('loadingSpinner').classList.remove('active');
         currentRouteMeta = { name: '', description: '', visible: false };
         $('routeDisplayName').value = '';
         autoResizeTextarea($('routeDisplayName'));
