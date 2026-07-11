@@ -681,12 +681,18 @@ function buildRouteTree() {
         }
         node.routes.push({ key, name: leafName, fullPath });
     }
+    if (root.routes.length > 0) {
+        root.folders['Без категории'] = root.folders['Без категории'] || { folders: {}, routes: [] };
+        root.folders['Без категории'].routes.push(...root.routes);
+        root.routes = [];
+    }
     return root;
 }
 
 function renderTreeLevel(node, pathPrefix, container) {
     const frag = document.createDocumentFragment();
     for (const [name, sub] of Object.entries(node.folders).sort(([a], [b]) => a.localeCompare(b))) {
+        if (name === 'Без категории') continue;
         const folderPath = pathPrefix ? pathPrefix + '/' + name : name;
         const total = countNodeRoutes(sub);
         const isExpanded = _expandedFolders.has(folderPath);
@@ -723,6 +729,43 @@ function renderTreeLevel(node, pathPrefix, container) {
             const childWrap = document.createElement('div');
             childWrap.style.cssText = 'padding-left:16px;display:flex;flex-direction:column;gap:6px;';
             renderTreeLevel(sub, folderPath, childWrap);
+            frag.appendChild(childWrap);
+        }
+    }
+
+    const uncat = node.folders['Без категории'];
+    if (uncat) {
+        const fcPath = pathPrefix ? pathPrefix + '/' + 'Без категории' : 'Без категории';
+        const fcExpanded = _expandedFolders.has(fcPath);
+        const fcTotal = countNodeRoutes(uncat);
+        const fcEl = document.createElement('div');
+        fcEl.className = 'category-folder';
+        fcEl.setAttribute('data-path', fcPath);
+        const fcHdr = document.createElement('div');
+        fcHdr.className = 'category-header' + (fcExpanded ? ' expanded' : '');
+        fcHdr.innerHTML = `
+            <span class="category-icon">${fcExpanded ? '📂' : '📁'}</span>
+            <span class="category-name">Без категории</span>
+            <span class="category-count">${fcTotal}</span>
+        `;
+        fcHdr.addEventListener('click', () => {
+            if (_expandedFolders.has(fcPath)) _expandedFolders.delete(fcPath);
+            else _expandedFolders.add(fcPath);
+            renderSettingsFileList();
+        });
+        fcEl.appendChild(fcHdr);
+        fcEl.addEventListener('dragover', e => { e.preventDefault(); fcEl.classList.add('drag-over'); });
+        fcEl.addEventListener('dragleave', () => fcEl.classList.remove('drag-over'));
+        fcEl.addEventListener('drop', e => {
+            e.preventDefault(); fcEl.classList.remove('drag-over');
+            const routeKey = e.dataTransfer.getData('text/plain');
+            if (routeKey) moveRouteToFolder(routeKey, fcPath);
+        });
+        frag.appendChild(fcEl);
+        if (fcExpanded) {
+            const childWrap = document.createElement('div');
+            childWrap.style.cssText = 'padding-left:16px;display:flex;flex-direction:column;gap:6px;';
+            renderTreeLevel(uncat, fcPath, childWrap);
             frag.appendChild(childWrap);
         }
     }
