@@ -1052,7 +1052,7 @@ const openRouteSettings = async (routeName) => {
             visible: meta.visible !== undefined ? meta.visible : false,
             creator_name: meta.creator_name || ''
         };
-        $('settingsRouteTitle').textContent = `Маршрут "${currentRouteMeta.name}"`;
+        $('settingsRouteTitle').textContent = currentRouteMeta.name;
         $('routeDisplayName').value = currentRouteMeta.name;
         $('routeDescription').value = currentRouteMeta.description;
         $('routeVisible').checked = currentRouteMeta.visible;
