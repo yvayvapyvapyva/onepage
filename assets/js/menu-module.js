@@ -323,6 +323,22 @@ const MenuModule = {
         return root;
     },
 
+    _buildMergedTree() {
+        const root = { folders: {}, routes: [] };
+        for (const [key, route] of Object.entries(this.routesDescriptions)) {
+            const fullPath = route.name || key;
+            const parts = fullPath.split('/').map(s => s.trim()).filter(Boolean);
+            const leafName = parts.pop() || fullPath;
+            let node = root;
+            for (const part of parts) {
+                if (!node.folders[part]) node.folders[part] = { folders: {}, routes: [] };
+                node = node.folders[part];
+            }
+            node.routes.push({ ...route, name: leafName, fullPath, key });
+        }
+        return root;
+    },
+
     _expandCurrentRoutePath() {
         if (!this.currentRoute) return;
         const route = this.routesDescriptions[this.currentRoute];
@@ -421,14 +437,17 @@ const MenuModule = {
 
         if (this._categoryTree) {
             if (!ROOT_CREATOR_FOLDER_VISIBLE || this._filterCreator) {
-                // При фильтрации или отключенных корневых папках — без обёртки создателя
-                const folders = Object.values(this._categoryTree.folders);
-                if (folders.length === 1) {
-                    this._renderTreeNode(folders[0], frag, '', false);
+                if (!ROOT_CREATOR_FOLDER_VISIBLE && !this._filterCreator) {
+                    const merged = this._buildMergedTree();
+                    this._renderTreeNode(merged, frag, '', false);
                 } else {
-                    // Если почему-то несколько папок — рендерим все
-                    for (const node of folders) {
-                        this._renderTreeNode(node, frag, '', false);
+                    const folders = Object.values(this._categoryTree.folders);
+                    if (folders.length === 1) {
+                        this._renderTreeNode(folders[0], frag, '', false);
+                    } else {
+                        for (const node of folders) {
+                            this._renderTreeNode(node, frag, '', false);
+                        }
                     }
                 }
             } else {
