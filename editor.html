@@ -42,7 +42,7 @@
 <div id="createFolderModal" onclick="if(event.target===this) toggleM('createFolderModal')"><div class="modal-sheet modal-sheet-compact"><h3 class="modal-title">Новая папка</h3><div class="input-wrapper" style="padding:4px;border-radius:14px;"><input type="text" id="newFolderNameInput" placeholder="Название папки"></div><div class="modal-actions"><button class="btn-action flex-1" onclick="toggleM('createFolderModal')">Отмена</button><button class="btn-action btn-primary flex-1" onclick="handleCreateFolder()">Создать</button></div></div></div>
 <div id="settingsRouteModal" onclick="if(event.target===this) toggleM('settingsRouteModal')"><div class="modal-sheet" style="gap:0;padding:0;"><div class="modal-header"><h3 id="settingsRouteTitle">Настройки маршрута</h3><button class="close-circle" onclick="toggleM('settingsRouteModal')">✕</button></div><div class="modal-body-scroll">
 <div class="field-label">Имя маршрута</div>
-<div class="input-wrapper" style="padding:3px;border-radius:12px;margin-bottom:8px;"><input type="text" id="routeDisplayName" placeholder="Введите имя маршрута" style="width:100%;padding:10px;border:none;font-size:16px;outline:none;background:transparent;color:#f5f7fa;font-family:inherit;"></div>
+<div class="input-wrapper" style="padding:3px;border-radius:12px;margin-bottom:8px;"><textarea id="routeDisplayName" placeholder="Введите имя маршрута" rows="1" style="width:100%;padding:10px;border:none;font-size:16px;outline:none;background:transparent;color:#f5f7fa;font-family:inherit;resize:none;overflow:hidden;min-height:44px;box-sizing:border-box;"></textarea></div>
 <div class="field-label">Описание маршрута</div>
 <div class="input-wrapper" style="padding:3px;border-radius:12px;margin-bottom:8px;"><textarea id="routeDescription" placeholder="Введите описание маршрута" rows="2" style="width:100%;padding:10px;border:none;font-size:16px;outline:none;background:transparent;color:#f5f7fa;font-family:inherit;resize:none;min-height:56px;"></textarea></div>
 
@@ -314,13 +314,21 @@ const showToast = (text, type = 'info', duration = 2200) => {
     toastTimer = setTimeout(() => el.classList.remove('show'), duration);
 };
 
-document.addEventListener('pointerdown', (e) => {
-    const btn = $('instructionBtn');
-    if (!btn) return;
-    const isBtn = btn.contains(e.target);
-    btn.style.display = 'none';
-    if (isBtn) openInstruction();
-}, { once: true });
+    const autoResizeTextarea = (el) => {
+        el.style.height = 'auto';
+        el.style.height = el.scrollHeight + 'px';
+    };
+    document.addEventListener('input', (e) => {
+        if (e.target && e.target.id === 'routeDisplayName') autoResizeTextarea(e.target);
+    }, true);
+
+    document.addEventListener('pointerdown', (e) => {
+        const btn = $('instructionBtn');
+        if (!btn) return;
+        const isBtn = btn.contains(e.target);
+        btn.style.display = 'none';
+        if (isBtn) openInstruction();
+    }, { once: true });
 
 async function callYcFunction(action, params = {}, bodyData = null) {
     const url = new URL(YC_FUNCTION_URL);
@@ -1051,12 +1059,14 @@ const openRouteSettings = async (routeName) => {
         };
         $('settingsRouteTitle').textContent = `Маршрут "${currentRouteMeta.name}"`;
         $('routeDisplayName').value = currentRouteMeta.name;
+        autoResizeTextarea($('routeDisplayName'));
         $('routeDescription').value = currentRouteMeta.description;
         $('routeVisible').checked = currentRouteMeta.visible;
     } catch (e) {
         
         currentRouteMeta = { name: '', description: '', visible: false };
         $('routeDisplayName').value = '';
+        autoResizeTextarea($('routeDisplayName'));
         $('routeDescription').value = '';
         $('routeVisible').checked = false;
     }
