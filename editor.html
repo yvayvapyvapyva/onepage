@@ -878,6 +878,12 @@ const renderSettingsFileList = () => {
         $('settingsTitle').textContent = `${getFormattedCreatorName()} - маршрутов:0`;
         return;
     }
+    if (curRoute) {
+        const routeName = getRouteName(curRoute);
+        if (!routeName.includes('/')) {
+            _expandedFolders.add('Без категории');
+        }
+    }
     const tree = buildRouteTree();
     renderTreeLevel(tree, '', list);
     const existingPaths = new Set();
