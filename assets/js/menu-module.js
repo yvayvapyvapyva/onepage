@@ -183,26 +183,44 @@ const MenuModule = {
      * Загрузка списка маршрутов из Яндекс-функции
      */
     async _loadRoutesList() {
-        // Защита от одновременных запросов
         if (this._isFetchingRoutes) return;
+        if (this._retryTimer) {
+            clearTimeout(this._retryTimer);
+            this._retryTimer = null;
+        }
         this._isFetchingRoutes = true;
-        
-        try {
-            await this._fetchFromAPI();
-            this._expandCurrentRoutePath();
-            this._buildRoutesList();
-        } catch (e) {
-            console.warn('Не удалось загрузить список маршрутов:', e);
-            const container = document.getElementById('routesListContainer');
+
+        const container = document.getElementById('routesListContainer');
+
+        const showSpinner = () => {
             if (container) {
                 container.innerHTML = `
-                    <div style="text-align:center; padding:20px; color:rgba(255,100,100,0.8); font-size:14px;">
-                        Не удалось загрузить список маршрутов.<br>
-                        <small>Введите ID и название вручную</small>
+                    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:30px;gap:12px;">
+                        <div class="spinner-ring" style="width:28px;height:28px;border-width:3px;"></div>
+                        <div style="color:rgba(255,255,255,0.5);font-size:14px;">Загрузка списка маршрутов...</div>
                     </div>
                 `;
             }
-        } finally {
+        };
+
+        const attempt = async () => {
+            try {
+                await this._fetchFromAPI();
+                this._expandCurrentRoutePath();
+                this._buildRoutesList();
+                return true;
+            } catch (e) {
+                console.warn('Не удалось загрузить список маршрутов:', e);
+                showSpinner();
+                return false;
+            }
+        };
+
+        const ok = await attempt();
+        if (!ok) {
+            this._isFetchingRoutes = false;
+            this._retryTimer = setTimeout(() => this._loadRoutesList(), 5000);
+        } else {
             this._isFetchingRoutes = false;
         }
     },
@@ -454,6 +472,8 @@ const MenuModule = {
     _buildRoutesList() {
         const container = document.getElementById('routesListContainer');
         if (!container) return;
+
+        if (!this.routesDescriptions) return;
 
         const frag = document.createDocumentFragment();
 
@@ -935,6 +955,10 @@ const MenuModule = {
         const modal = document.getElementById('jsonModal');
         if (modal) modal.classList.add('hidden');
         this._hideRouteDescription();
+        if (this._retryTimer) {
+            clearTimeout(this._retryTimer);
+            this._retryTimer = null;
+        }
     },
     
     // Показать модальное окно
@@ -952,7 +976,11 @@ const MenuModule = {
                 this._fetchUserRoutes(uid).then(() => this._buildRoutesList());
             }
         }
-        this._buildRoutesList();
+        if (!this.routesDescriptions && !this._isFetchingRoutes) {
+            this._loadRoutesList();
+        } else {
+            this._buildRoutesList();
+        }
     },
     
     showSpinner() {
