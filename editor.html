@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <title>Редактор маршрутов</title>
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-    <link rel="stylesheet" href="assets/css/styles.css">
+    <link rel="stylesheet" href="assets/css/styles.css?v=1">
 </head>
 <body>
 
@@ -89,11 +89,24 @@
     </div>
 </div>
 
+<div id="loginModal" onclick="if(event.target===this) toggleM('loginModal')" style="display:none;"><div class="modal-sheet" style="max-width:360px;margin:0 auto;border-radius:20px;"><div class="modal-header"><h3 style="text-align:center;flex:1;">Авторизация</h3><button class="close-circle" onclick="toggleM('loginModal')">✕</button></div><div class="modal-body-scroll" style="padding:0 20px 20px;">
+<div class="auth-tabs" style="display:flex;margin-bottom:20px;background:rgba(255,255,255,0.06);border-radius:12px;padding:3px;">
+<button class="auth-tab active" data-tab="login" style="flex:1;text-align:center;padding:10px;border-radius:10px;font-size:15px;font-weight:600;color:rgba(255,255,255,0.5);cursor:pointer;border:none;background:transparent;font-family:inherit;">Вход</button>
+<button class="auth-tab" data-tab="register" style="flex:1;text-align:center;padding:10px;border-radius:10px;font-size:15px;font-weight:600;color:rgba(255,255,255,0.5);cursor:pointer;border:none;background:transparent;font-family:inherit;">Регистрация</button>
+</div>
+<div class="auth-field" style="margin-bottom:12px;"><input type="text" id="authLogin" placeholder="Логин" autocomplete="username" style="width:100%;padding:14px 16px;border-radius:14px;border:1px solid rgba(255,255,255,0.12);background:rgba(255,255,255,0.06);color:#f5f7fa;font-size:16px;outline:none;box-sizing:border-box;font-family:inherit;"></div>
+<div class="auth-field" style="margin-bottom:12px;"><input type="password" id="authPassword" placeholder="Пароль" autocomplete="current-password" style="width:100%;padding:14px 16px;border-radius:14px;border:1px solid rgba(255,255,255,0.12);background:rgba(255,255,255,0.06);color:#f5f7fa;font-size:16px;outline:none;box-sizing:border-box;font-family:inherit;"></div>
+<div id="authNameField" class="auth-field" style="margin-bottom:12px;display:none;"><input type="text" id="authName" placeholder="Ваше имя" style="width:100%;padding:14px 16px;border-radius:14px;border:1px solid rgba(255,255,255,0.12);background:rgba(255,255,255,0.06);color:#f5f7fa;font-size:16px;outline:none;box-sizing:border-box;font-family:inherit;"></div>
+<button id="authActionBtn" class="auth-btn auth-btn-login" style="width:100%;padding:14px;border-radius:14px;border:none;font-size:17px;font-weight:700;color:#fff;cursor:pointer;font-family:inherit;margin-top:8px;background:linear-gradient(180deg,rgba(0,122,255,0.9),rgba(0,90,200,0.85));">Войти</button>
+<div id="authError" class="auth-modal-error" style="font-size:13px;color:#FF453A;text-align:center;margin-top:8px;display:none;"></div>
+<div id="authSuccess" class="auth-modal-success" style="font-size:13px;color:#30D158;text-align:center;margin-top:8px;display:none;"></div>
+</div></div></div>
+
 <script src="https://unpkg.com/@vkontakte/vk-bridge/dist/browser.min.js"></script>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="https://api-maps.yandex.ru/v3/?apikey=c0e28937-4e16-4d15-9b99-09a30cb8fc13&lang=ru_RU"></script>
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js" defer></script>
-<script src="assets/js/config.js"></script>
+<script src="assets/js/config.js?v=1"></script>
 <script>
 (function (global) {
   const byId = (id) => document.getElementById(id);
@@ -522,7 +535,8 @@ ymaps3.ready.then(async () => {
     }
 
     if (!window.authPlatform) {
-        window.location.href = 'login.html';
+        showLoginModal();
+        // When login succeeds, page reloads and initialization starts fresh
         return;
     }
 
@@ -1810,7 +1824,106 @@ window.closeZnakiSelector = closeZnakiSelector;
 window.selectZnak = selectZnak;
 window.handleCreateFolder = handleCreateFolder;
 
-// Долгое нажатие на 🔗 → login.html (смена пользователя)
+// ---- Login modal ----
+let _loginCurrentTab = 'login';
+
+function showLoginModal() {
+    const err = document.getElementById('authError');
+    const succ = document.getElementById('authSuccess');
+    if (err) err.style.display = 'none';
+    if (succ) succ.style.display = 'none';
+    toggleM('loginModal');
+}
+window.showLoginModal = showLoginModal;
+
+document.querySelectorAll('#loginModal .auth-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+        document.querySelectorAll('#loginModal .auth-tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        _loginCurrentTab = tab.dataset.tab;
+        const btn = document.getElementById('authActionBtn');
+        const nameField = document.getElementById('authNameField');
+        if (_loginCurrentTab === 'register') {
+            btn.textContent = 'Зарегистрироваться';
+            btn.style.background = 'linear-gradient(180deg,rgba(52,199,89,0.9),rgba(40,160,70,0.85))';
+            nameField.style.display = 'block';
+        } else {
+            btn.textContent = 'Войти';
+            btn.style.background = 'linear-gradient(180deg,rgba(0,122,255,0.9),rgba(0,90,200,0.85))';
+            nameField.style.display = 'none';
+        }
+        document.getElementById('authError').style.display = 'none';
+        document.getElementById('authSuccess').style.display = 'none';
+    });
+});
+
+document.getElementById('authActionBtn').addEventListener('click', async () => {
+    const login = document.getElementById('authLogin').value.trim();
+    const password = document.getElementById('authPassword').value;
+    const name = document.getElementById('authName').value.trim() || login;
+    const errorEl = document.getElementById('authError');
+    const successEl = document.getElementById('authSuccess');
+
+    if (!login || !password) {
+        errorEl.textContent = 'Заполните все поля';
+        errorEl.style.display = 'block';
+        return;
+    }
+
+    errorEl.style.display = 'none';
+    successEl.style.display = 'none';
+
+    const btn = document.getElementById('authActionBtn');
+    btn.disabled = true;
+    btn.textContent = 'Подождите...';
+
+    try {
+        const action = _loginCurrentTab === 'register' ? 'register' : 'login';
+        const params = new URLSearchParams({ action, login, password });
+        if (action === 'register') params.set('creator_name', name);
+
+        const res = await fetch(`${YC_FUNCTION_URL}?${params.toString()}`);
+        const data = await res.json();
+
+        if (!res.ok) {
+            throw new Error(data.error || 'Ошибка');
+        }
+
+        if (_loginCurrentTab === 'register') {
+            successEl.textContent = 'Регистрация успешна! Теперь войдите.';
+            successEl.style.display = 'block';
+        } else {
+            const AUTH_KEY = '3api_auth';
+            localStorage.setItem(AUTH_KEY, JSON.stringify({ platform: 'user', login, password, name }));
+            location.reload();
+            return;
+        }
+    } catch (e) {
+        const code = e.message;
+        if (code === 'invalid_credentials') {
+            errorEl.textContent = 'Неправильный логин или пароль';
+        } else if (code === 'login_taken') {
+            errorEl.textContent = 'Этот логин уже занят';
+        } else if (code === 'login_must_contain_letter') {
+            errorEl.textContent = 'Логин должен содержать хотя бы одну букву';
+        } else if (code === 'login_no_hyphen') {
+            errorEl.textContent = 'Логин не может содержать дефис';
+        } else if (code === 'login_min_2_password_min_3') {
+            errorEl.textContent = 'Логин минимум 2 символа, пароль минимум 3';
+        } else if (code === 'missing_fields') {
+            errorEl.textContent = 'Заполните все поля';
+        } else {
+            errorEl.textContent = code;
+        }
+        errorEl.style.display = 'block';
+    } finally {
+        btn.disabled = false;
+        btn.textContent = _loginCurrentTab === 'register' ? 'Зарегистрироваться' : 'Войти';
+    }
+});
+// ----------------------------
+
+// Долгое нажатие на 🔗 → смена пользователя
 const shareBtn = document.querySelector('.settings-share-btn');
 let longPressTimer = null;
 let wasLongPress = false;
@@ -1820,7 +1933,7 @@ shareBtn.addEventListener('pointerdown', () => {
     longPressTimer = setTimeout(() => {
         wasLongPress = true;
         longPressTimer = null;
-        window.location.href = 'login.html';
+        showLoginModal();
     }, 1000);
 });
 

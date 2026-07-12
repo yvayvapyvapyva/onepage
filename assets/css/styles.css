@@ -867,6 +867,23 @@ html, body {
     height: auto;
 }
 
+#loginModal {
+    position: fixed;
+    inset: 0;
+    z-index: 11000;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+}
+
+#loginModal .modal-sheet {
+    height: auto;
+}
+
+.auth-tab.active { background: rgba(0,122,255,0.3) !important; color: #fff !important; }
+
 #settingsRouteModal {
     position: fixed;
     top: calc(76px + env(safe-area-inset-top));
