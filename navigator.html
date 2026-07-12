@@ -570,26 +570,6 @@ function driveAlongPath(fromIdx) {
 }
 
 
-function fitMapToBounds(bounds, zoomMargin = 80) {
-    if (!APP.map || !bounds) return;
-    const [[minLat, minLon], [maxLat, maxLon]] = bounds;
-    const centerLon = (minLon + maxLon) / 2;
-    const centerLat = (minLat + maxLat) / 2;
-    const latDiff = maxLat - minLat;
-    const lonDiff = maxLon - minLon;
-    const maxDiff = Math.max(latDiff, lonDiff);
-    let zoom = 18;
-    if (maxDiff > 0.5) zoom = 10;
-    else if (maxDiff > 0.2) zoom = 11;
-    else if (maxDiff > 0.1) zoom = 12;
-    else if (maxDiff > 0.02) zoom = 13;
-    else if (maxDiff > 0.01) zoom = 14;
-    else if (maxDiff > 0.005) zoom = 15;
-    else if (maxDiff > 0.002) zoom = 16;
-    else if (maxDiff > 0.0005) zoom = 17;
-    APP.map.setLocation({ center: [centerLon, centerLat], zoom, duration: 400 });
-}
-
 function initGeolocation() {
     if (navigator.geolocation) {
         navigator.geolocation.watchPosition(pos => {
@@ -1059,7 +1039,8 @@ function showPreview(i) {
                 if (lon < minLon) minLon = lon;
                 if (lon > maxLon) maxLon = lon;
             }
-            APP.map.update({ location: { bounds: [[minLon, minLat], [maxLon, maxLat]], duration: 1000 } });
+            const pad = Math.max(Math.abs(maxLat - minLat), Math.abs(maxLon - minLon)) * 0.1;
+            APP.map.update({ location: { bounds: [[minLon - pad, minLat - pad], [maxLon + pad, maxLat + pad]], duration: 1000 } });
         } else if (p.lat && p.lon) {
             APP.map.update({ location: { center: [p.lon, p.lat], duration: 1000 } });
         }
@@ -1225,16 +1206,19 @@ async function processRouteData(data) {
     if (APP.navPoints.length > 0 && APP.map) {
         setTimeout(() => {
             let minLat = Infinity, maxLat = -Infinity, minLon = Infinity, maxLon = -Infinity;
-            APP.navPoints.forEach(p => {
-                if (p.lat && p.lon) {
-                    if (p.lat < minLat) minLat = p.lat;
-                    if (p.lat > maxLat) maxLat = p.lat;
-                    if (p.lon < minLon) minLon = p.lon;
-                    if (p.lon > maxLon) maxLon = p.lon;
+            for (const p of APP.navPoints) {
+                if (!p.pts) continue;
+                for (const pt of p.pts) {
+                    const lat = pt[0], lon = pt[1];
+                    if (lat < minLat) minLat = lat;
+                    if (lat > maxLat) maxLat = lat;
+                    if (lon < minLon) minLon = lon;
+                    if (lon > maxLon) maxLon = lon;
                 }
-            });
+            }
             if (minLat !== Infinity) {
-                fitMapToBounds([[minLat, minLon], [maxLat, maxLon]]);
+                const pad = Math.max(Math.abs(maxLat - minLat), Math.abs(maxLon - minLon)) * 0.1;
+                APP.map.update({ location: { bounds: [[minLon - pad, minLat - pad], [maxLon + pad, maxLat + pad]], duration: 400 } });
             }
         }, 100);
     }
