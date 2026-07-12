@@ -1049,8 +1049,20 @@ function showPreview(i) {
     updateHud();
     renderRoutePoints();
 
-    if (p.lat && p.lon && APP.map) {
-        APP.map.update({ location: { center: [p.lon, p.lat], duration: 1000 } });
+    if (APP.map) {
+        if (p.pts && p.pts.length >= 2) {
+            let minLat = Infinity, maxLat = -Infinity, minLon = Infinity, maxLon = -Infinity;
+            for (const pt of p.pts) {
+                const lat = pt[0], lon = pt[1];
+                if (lat < minLat) minLat = lat;
+                if (lat > maxLat) maxLat = lat;
+                if (lon < minLon) minLon = lon;
+                if (lon > maxLon) maxLon = lon;
+            }
+            APP.map.update({ location: { bounds: [[minLon, minLat], [maxLon, maxLat]], duration: 1000 } });
+        } else if (p.lat && p.lon) {
+            APP.map.update({ location: { center: [p.lon, p.lat], duration: 1000 } });
+        }
     }
 }
 
