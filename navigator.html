@@ -965,6 +965,7 @@ function renderRoutePoints() {
 
     const map = APP.map;
     if (map) {
+        renderInfoMarkers();
         for (let ci = 0; ci < APP.navPoints.length; ci++) {
             const pt = APP.navPoints[ci];
             if (pt.line) map.addChild(pt.line);
@@ -974,7 +975,6 @@ function renderRoutePoints() {
             if (pt.placemark) map.addChild(pt.placemark);
         }
     }
-    renderInfoMarkers();
     updateHud();
 }
 
